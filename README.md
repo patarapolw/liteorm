@@ -1,11 +1,11 @@
 # liteorm
 
-Simple wrapper for `sqlite`, excluding JOINS; with typings based on TypeScript decorators, `reflect-metadata`; and event emitter.
+Simple wrapper for `sqlite`; with typings based on TypeScript decorators, `reflect-metadata`; and event emitter. Focusing on MongoDB interop.
 
 ## Usage
 
 ```typescript
-import { Table, primary, prop } from "liteorm";
+import { Table, primary, prop, Collection } from "liteorm";
 import sqlite from "sqlite";
 import SparkMD5 from "spark-md5";
 
@@ -102,3 +102,9 @@ media.on("pre-update", (cond: any, set: any) => {
 ```
 
 For more, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts>
+
+## Installation
+
+```
+npm i liteorm
+```
