@@ -1,0 +1,35 @@
+{
+  "name": "liteorm",
+  "version": "0.1.0",
+  "description": "Simple ORM for SQLite with TypeScript interface",
+  "main": "dist/index.js",
+  "scripts": {
+    "prepublishOnly": "npm run tsc",
+    "test": "ts-mocha tests/**/*.spec.ts",
+    "tsc": "tsc -p tsconfig.lib.json"
+  },
+  "keywords": [
+    "sqlite",
+    "orm"
+  ],
+  "author": "Pacharapol Withayasakpunt",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/patarapolw/rep2recall.git"
+  },
+  "dependencies": {
+    "@types/bluebird-global": "^3.5.12",
+    "@types/node": "^12.7.4",
+    "bluebird": "^3.5.5",
+    "bluebird-global": "^1.0.1",
+    "reflect-metadata": "^0.1.13",
+    "sqlite": "^3.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/mocha": "^5.2.7"
+  }
+}
