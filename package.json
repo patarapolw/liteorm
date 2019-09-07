@@ -1,12 +1,13 @@
 {
   "name": "liteorm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Simple ORM for SQLite with TypeScript interface",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "prepublishOnly": "npm run tsc",
+    "prepublishOnly": "npm run build",
     "test": "ts-mocha tests/**/*.spec.ts",
-    "tsc": "tsc -p tsconfig.lib.json"
+    "build": "tsc -p tsconfig.lib.json"
   },
   "keywords": [
     "sqlite",
@@ -19,17 +20,13 @@
     "url": "https://github.com/patarapolw/rep2recall.git"
   },
   "dependencies": {
-    "@types/bluebird-global": "^3.5.12",
     "@types/node": "^12.7.4",
-    "bluebird": "^3.5.5",
-    "bluebird-global": "^1.0.1",
-    "reflect-metadata": "^0.1.13",
-    "sqlite": "^3.0.3"
-  },
-  "publishConfig": {
-    "access": "public"
+    "async-eventemitter": "^0.2.4",
+    "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
-    "@types/mocha": "^5.2.7"
+    "@types/mocha": "^5.2.7",
+    "sqlite": "^3.0.3",
+    "typescript": "^3.6.2"
   }
 }

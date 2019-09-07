@@ -80,23 +80,23 @@ const note = await new Collection<DbNote>(db, new DbNote()).build();
 const media = await new Collection<DbMedia>(db, new DbMedia()).build();
 const card = await new Collection<DbCard>(db, new DbCard()).build();
 
-note.on("pre-create", (t) => {
-  t.key = SparkMD5.hash(stringify(t.data));
+note.on("pre-create", (p) => {
+  p.entry.key = SparkMD5.hash(stringify(p.entry.data));
 });
 
-note.on("pre-update", (cond: any, set: any) => {
-  if (set.data) {
-    set.key = SparkMD5.hash(stringify(set.data));
+note.on("pre-update", (p) => {
+  if (p.set.data) {
+    p.set.key = SparkMD5.hash(stringify(p.set.data));
   }
 });
 
-media.on("pre-create", (t) => {
-  t.h = SparkMD5.ArrayBuffer.hash(t.data);
+media.on("pre-create", (p) => {
+  p.entry.h = SparkMD5.ArrayBuffer.hash(p.entry.data);
 });
 
-media.on("pre-update", (cond: any, set: any) => {
-  if (set.data) {
-    set.h = SparkMD5.ArrayBuffer.hash(set.data);
+media.on("pre-update", (p) => {
+  if (p.set.data) {
+    p.set.h = SparkMD5.ArrayBuffer.hash(p.set.data);
   }
 });
 ```

@@ -1,6 +1,6 @@
-import { EventEmitter } from "events";
 import sqlite from "sqlite";
-import "bluebird-global";
+import "./types";
+import AsyncEventEmitter from "async-eventemitter";
 
 export type SqliteNative = "string" | "integer" | "float" | "binary";
 export type SqliteExt = "datetime" | "JSON";
@@ -8,6 +8,11 @@ export type SqliteExt = "datetime" | "JSON";
 interface ITransformer<T> {
   get: (repr: string | null) => T | null;
   set: (data: T) => string | null;
+}
+
+interface ISql {
+  statement: string;
+  params: any[];
 }
 
 export interface IPrimaryRow {
@@ -24,7 +29,26 @@ export interface IPropRow {
   default?: any;
 }
 
-export class Collection<T> {
+export class Collection<T> extends AsyncEventEmitter<{
+  "build": (data: ISql) => void,
+  "pre-create": (data: {entry: T, ignoreErrors: boolean}) => void,
+  "create": (data: ISql) => void,
+  "pre-find": (data: {
+    cond: Partial<Record<keyof T, any>>;
+    fields?: Array<keyof T> | null;
+    postfix?: string;
+  }) => void,
+  "find": (data: ISql) => void,
+  "pre-update": (data: {
+    cond: Partial<Record<keyof T, any>>;
+    set: Partial<Record<keyof T, any>>;
+  }) => void,
+  "update": (data: ISql) => void,
+  "pre-delete": (data: {
+    cond: Partial<Record<keyof T, any>>
+  }) => void,
+  "delete": (data: ISql) => void
+}> {
   public __meta: {
     db: sqlite.Database;
     name: string;
@@ -34,13 +58,12 @@ export class Collection<T> {
     transform: Record<SqliteExt, ITransformer<any>>;
   };
 
-  public __ev = new EventEmitter();
-  public on = this.__ev.on;
-
   constructor(
-    db: sqlite.Database, 
-    model: T,
+    db: sqlite.Database,
+    model: T
   ) {
+    super();
+
     const { name, primary, unique, prop } = (model as any).__meta;
 
     this.__meta = {
@@ -114,15 +137,19 @@ export class Collection<T> {
       })
     }
 
-    this.__meta.db.exec(`
-    CREATE TABLE IF NOT EXISTS "${this.__meta.name}" (${col.join(",")})
-    `)
+    const sql: ISql = {
+      statement: `CREATE TABLE IF NOT EXISTS "${this.__meta.name}" (${col.join(",")})`,
+      params: []
+    };
+
+    await new Promise((resolve) => this.emit("build", sql, resolve));
+    await this.__meta.db.exec(sql.statement);
 
     return this;
   }
 
   public async create(entry: T, ignoreErrors = false): Promise<number> {
-    this.__ev.emit("pre-create", entry);
+    await new Promise((resolve) => this.emit("pre-create", {entry, ignoreErrors}, resolve));
 
     const bracketed: string[] = [];
     const values: string[] = [];
@@ -140,12 +167,16 @@ export class Collection<T> {
       values.push(v);
     }
 
-    const r = await this.__meta.db.run(`
-    INSERT INTO "${this.__meta.name}" (${bracketed.map((el) => `"${el}"`).join(",")})
-    VALUES (${values.map((_) => "?").join(",")})
-    ${ignoreErrors ? "ON CONFLICT DO NOTHING" : ""}`, ...values);
+    const sql = {
+      statement: `
+      INSERT INTO "${this.__meta.name}" (${bracketed.map((el) => `"${el}"`).join(",")})
+      VALUES (${values.map((_) => "?").join(",")})
+      ${ignoreErrors ? "ON CONFLICT DO NOTHING" : ""}`,
+      params: values
+    };
 
-    this.__ev.emit("create", entry);
+    await new Promise((resolve) => this.emit("create", sql, resolve));
+    const r = await this.__meta.db.run(sql.statement, ...sql.params);
 
     return r.lastID;
   }
@@ -155,7 +186,7 @@ export class Collection<T> {
     fields?: Array<keyof T> | null,
     postfix?: string
   ): Promise<Partial<T>[]> {
-    this.__ev.emit("pre-read", fields, cond, postfix);
+    await new Promise((resolve) => this.emit("pre-find", {cond, fields, postfix}, resolve));
 
     const where = this.getWhere(cond);
 
@@ -168,11 +199,17 @@ export class Collection<T> {
       })
     }
 
-    const r = (await this.__meta.db.all(`
-    SELECT ${selectClause.join(",")}
-    FROM "${this.__meta.name}"
-    ${where ? `WHERE ${where.clause}` : ""} ${postfix || ""}`,
-    ...(where ? where.params.map((el) => el === undefined ? null : el) : []))).map((el) => {
+    const sql: ISql = {
+      statement: `
+      SELECT ${selectClause.join(",")}
+      FROM "${this.__meta.name}"
+      ${where ? `WHERE ${where.clause}` : ""} ${postfix || ""}`,
+      params: where ? where.params.map((el) => el === undefined ? null : el) : []
+    };
+
+    await new Promise((resolve) => this.emit("find", sql, resolve));
+    const r = (await this.__meta.db.all(sql.statement,
+    ...sql.params)).map((el) => {
       for (const [k, v] of Object.entries(el)) {
         const prop = (this.__meta.prop as any)[k];
         if (prop && prop.type) {
@@ -185,8 +222,6 @@ export class Collection<T> {
 
       return el;
     });
-
-    this.__ev.emit("read", fields, cond, postfix);
 
     return r;
   }
@@ -202,13 +237,7 @@ export class Collection<T> {
     cond: Partial<Record<keyof T, any>>,
     set: Partial<Record<keyof T, any>>,
   ) {
-    this.__ev.emit("pre-update", cond, set);
-
-    if (this.__ev.listeners("pre-update-async").length > 0) {
-      await new Promise((resolve) => {
-        this.__ev.emit("pre-update-async", cond, set, resolve);
-      });
-    }
+    await new Promise((resolve) => this.emit("pre-update", {cond, set}, resolve));
 
     const setK: string[] = [];
     const setV: any[] = [];
@@ -225,29 +254,39 @@ export class Collection<T> {
       setV.push(v);
     }
 
-    await this.__meta.db.run(`
-    UPDATE "${this.__meta.name}"
-    SET ${setK.join(",")}
-    ${where ? `WHERE ${where.clause}` : ""}`,
-      ...setV,
-      ...(where ? where.params.map((el) => el === undefined ? null : el) : []));
+    const sql: ISql = {
+      statement: `
+      UPDATE "${this.__meta.name}"
+      SET ${setK.join(",")}
+      ${where ? `WHERE ${where.clause}` : ""}`,
+      params: [
+        ...setV,
+        ...(where ? where.params.map((el) => el === undefined ? null : el) : [])
+      ]
+    }
 
-    this.__ev.emit("update", cond, set);
+    await new Promise((resolve) => this.emit("update", sql, resolve));
+    await this.__meta.db.run(sql.statement,
+      ...sql.params);
   }
 
   public async delete(
     cond: Partial<Record<keyof T, any>>
   ) {
-    this.__ev.emit("pre-delete", cond);
+    await new Promise((resolve) => this.emit("pre-delete", {cond}, resolve));
 
     const where = this.getWhere(cond);
 
-    await this.__meta.db.run(`
-    DELETE FROM "${this.__meta.name}"
-    ${where ? `WHERE ${where.clause}` : ""}`,
-      ...(where ? where.params.map((el) => el === undefined ? null : el) : []));
+    const sql: ISql = {
+      statement: `
+      DELETE FROM "${this.__meta.name}"
+      ${where ? `WHERE ${where.clause}` : ""}`,
+      params: (where ? where.params.map((el) => el === undefined ? null : el) : [])
+    }
 
-    this.__ev.emit("delete", cond);
+    await new Promise((resolve) => this.emit("delete", sql, resolve));
+    await this.__meta.db.run(sql.statement,
+      ...sql.params);
   }
 
   private getWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {

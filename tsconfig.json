@@ -11,6 +11,7 @@
     "sourceMap": false,
     "noImplicitReturns": true,
     "noImplicitAny": true,
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "downlevelIteration": true,
     "declaration": true,
@@ -19,6 +20,9 @@
     "types": [
       "node",
       "mocha"
+    ],
+    "typeRoots": [
+      "@types"
     ],
     "paths": {
       "@/*": [
