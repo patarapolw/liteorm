@@ -20,7 +20,7 @@
     "url": "https://github.com/patarapolw/rep2recall.git"
   },
   "dependencies": {
-    "@types/node": "^12.7.4",
+    "@types/events": "^3.0.0",
     "async-eventemitter": "^0.2.4",
     "reflect-metadata": "^0.1.13"
   },

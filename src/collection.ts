@@ -30,24 +30,24 @@ export interface IPropRow {
 }
 
 export class Collection<T> extends AsyncEventEmitter<{
-  "build": (data: ISql) => void,
-  "pre-create": (data: {entry: T, ignoreErrors: boolean}) => void,
-  "create": (data: ISql) => void,
+  "build": (data: ISql, callback?: () => void) => void,
+  "pre-create": (data: {entry: T, ignoreErrors: boolean}, callback?: () => void) => void,
+  "create": (data: ISql, callback?: () => void) => void,
   "pre-find": (data: {
     cond: Partial<Record<keyof T, any>>;
     fields?: Array<keyof T> | null;
     postfix?: string;
-  }) => void,
-  "find": (data: ISql) => void,
+  }, callback?: () => void) => void,
+  "find": (data: ISql, callback?: () => void) => void,
   "pre-update": (data: {
     cond: Partial<Record<keyof T, any>>;
     set: Partial<Record<keyof T, any>>;
-  }) => void,
-  "update": (data: ISql) => void,
+  }, callback?: () => void) => void,
+  "update": (data: ISql, callback?: () => void) => void,
   "pre-delete": (data: {
     cond: Partial<Record<keyof T, any>>
-  }) => void,
-  "delete": (data: ISql) => void
+  }, callback?: () => void) => void,
+  "delete": (data: ISql, callback?: () => void) => void
 }> {
   public __meta: {
     db: sqlite.Database;
