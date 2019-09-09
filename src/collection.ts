@@ -188,7 +188,7 @@ export class Collection<T> extends AsyncEventEmitter<{
   ): Promise<Partial<T>[]> {
     await new Promise((resolve) => this.emit("pre-find", {cond, fields, postfix}, resolve));
 
-    const where = this.getWhere(cond);
+    const where = condToWhere(cond);
 
     const selectClause: string[] = [];
     if (!fields) {
@@ -241,7 +241,7 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     const setK: string[] = [];
     const setV: any[] = [];
-    const where = this.getWhere(cond);
+    const where = condToWhere(cond);
 
     for (let [k, v] of Object.entries<any>(set)) {
       const { type } = (this.__meta.prop as any)[k];
@@ -275,7 +275,7 @@ export class Collection<T> extends AsyncEventEmitter<{
   ) {
     await new Promise((resolve) => this.emit("pre-delete", {cond}, resolve));
 
-    const where = this.getWhere(cond);
+    const where = condToWhere(cond);
 
     const sql: ISql = {
       statement: `
@@ -289,62 +289,149 @@ export class Collection<T> extends AsyncEventEmitter<{
       ...sql.params);
   }
 
-  private getWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {
-    const cList: string[] = [];
-    const params: any[] = [];
+  public chain(select?: Array<keyof T>): Chain<T> {
+    return new Chain(this, select);
+  }
+}
 
-    for (let [k, v] of Object.entries(cond)) {
-      if (v && (v.constructor === {}.constructor || Array.isArray(v))) {
-        const v0 = Object.keys(v)[0];
-        const v1 = v[v0];
-        switch (v0) {
-          case "$like":
-            cList.push(`"${k}" LIKE ?`);
-            params.push(v1);
-            break;
-          case "$exists":
-            cList.push(`"${k}" IS ${v1 ? "NOT NULL" : "NULL"}`);
-            break;
-          case "$in":
-            if (v1.length > 1) {
-              cList.push(`"${k}" IN (${v1.map((_: any) => "?").join(",")})`)
-              params.push(...v1);
-            } else {
-              cList.push(`"${k}" = ?`);
-              params.push(v1[0]);
-            }
-            break;
-          case "$gt":
-            cList.push(`"${k}" > ?`);
-            params.push(v1);
-            break;
-          case "$gte":
-            cList.push(`"${k}" >= ?`);
-            params.push(v1);
-            break;
-          case "$lt":
-            cList.push(`"${k}" < ?`);
-            params.push(v1);
-            break;
-          case "$lte":
-            cList.push(`"${k}" <= ?`);
-            params.push(v1);
-            break;
-          default:
-            k += "JSON";
-            v = JSON.stringify(v);
-            cList.push(`"${k}" = ?`);
-            params.push(v);
-        }
-      } else {
-        cList.push(`"${k}" = ?`);
-        params.push(v);
+class Chain<T> {
+  public cols: Record<string, Collection<any>> = {};
+  public firstCol: Collection<T>;
+  
+  public select: string[] = [];
+  public from: string[] = [];
+
+  constructor(firstCol: Collection<T>, firstSelect?: Array<keyof T>) {
+    this.cols[firstCol.__meta.name] = firstCol;
+    this.firstCol = firstCol;
+
+    if (firstSelect) {
+      for (const l of firstSelect) {
+        this.select.push(`"${firstCol.__meta.name}"."${l}" AS "${firstCol.__meta.name}__${l}"`);
       }
     }
 
-    return cList.length > 0 ? {
-      clause: cList.join(" AND "),
-      params
-    } : null;
+    this.from.push(`FROM "${firstCol.__meta.name}"`);
   }
+
+  public join<U>(
+    to: Collection<U>,
+    on: [string, keyof U],
+    select?: Array<keyof U> | null,
+    type?: "left" | "inner"
+  ): this {
+    if (select) {
+      for (const r of select) {
+        this.select.push(`"${to.__meta.name}"."${r}" AS "${to.__meta.name}__${r}"`);
+      }
+    }
+
+    this.from.push(`${type || ""} JOIN "${to.__meta.name}" ON "${on[0]}" = "${to.__meta.name}".${on[1]}`);
+
+    return this;
+  }
+
+  public sql(
+    cond?: Record<string, any>, 
+    postfix?: string
+  ): ISql {
+    const where = cond ? condToWhere(cond) : null;
+
+    return {
+      statement: `
+      SELECT ${this.select.join(",")}
+      ${this.from.join("\n")}
+      ${where ? where.clause : ""}
+      ${postfix || ""}`,
+      params: where ? where.params : []
+    };
+  }
+
+  public async data(
+    cond?: Record<string, any>,
+    postfix?: string
+  ): Promise<Array<Record<string, Record<string, any>>>> {
+    const sql = this.sql(cond, postfix);
+
+    return (await this.firstCol.__meta.db.all(sql.statement, sql.params)).map((c) => {
+      const item: Record<string, Record<string, any>> = {};
+
+      for (const [k, v] of Object.entries<any>(c)) {
+        const [tableName, r] = k.split("__");
+
+        const prop = (this.cols[tableName].__meta.prop as any)[r];
+        if (prop && prop.type) {
+          const tr = (this.cols[tableName].__meta.transform as any)[prop.type];
+          if (tr) {
+            item[tableName][r] = tr.get(v);
+          }
+        }
+
+        if (item[tableName][r] === undefined) {
+          item[tableName][r] = v;
+        }
+      }
+      
+      return item;
+    });
+  }
+}
+
+function condToWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {
+  const cList: string[] = [];
+  const params: any[] = [];
+
+  for (let [k, v] of Object.entries(cond)) {
+    if (v && (v.constructor === {}.constructor || Array.isArray(v))) {
+      const v0 = Object.keys(v)[0];
+      const v1 = v[v0];
+      switch (v0) {
+        case "$like":
+          cList.push(`"${k}" LIKE ?`);
+          params.push(v1);
+          break;
+        case "$exists":
+          cList.push(`"${k}" IS ${v1 ? "NOT NULL" : "NULL"}`);
+          break;
+        case "$in":
+          if (v1.length > 1) {
+            cList.push(`"${k}" IN (${v1.map((_: any) => "?").join(",")})`)
+            params.push(...v1);
+          } else {
+            cList.push(`"${k}" = ?`);
+            params.push(v1[0]);
+          }
+          break;
+        case "$gt":
+          cList.push(`"${k}" > ?`);
+          params.push(v1);
+          break;
+        case "$gte":
+          cList.push(`"${k}" >= ?`);
+          params.push(v1);
+          break;
+        case "$lt":
+          cList.push(`"${k}" < ?`);
+          params.push(v1);
+          break;
+        case "$lte":
+          cList.push(`"${k}" <= ?`);
+          params.push(v1);
+          break;
+        default:
+          k += "JSON";
+          v = JSON.stringify(v);
+          cList.push(`"${k}" = ?`);
+          params.push(v);
+      }
+    } else {
+      cList.push(`"${k}" = ?`);
+      params.push(v);
+    }
+  }
+
+  return cList.length > 0 ? {
+    clause: cList.join(" AND "),
+    params
+  } : null;
 }
