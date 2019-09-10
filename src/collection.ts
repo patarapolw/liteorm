@@ -316,7 +316,8 @@ class Chain<T> {
 
   public join<U>(
     to: Collection<U>,
-    on: [string, keyof U],
+    foreignField: string,
+    localField: keyof T = "_id" as any,
     select?: Array<keyof U> | null,
     type?: "left" | "inner"
   ): this {
@@ -326,7 +327,8 @@ class Chain<T> {
       }
     }
 
-    this.from.push(`${type || ""} JOIN "${to.__meta.name}" ON "${on[0]}" = "${to.__meta.name}".${on[1]}`);
+    this.from.push(`${type || ""} JOIN "${to.__meta.name}" ON "${foreignField}" = "${to.__meta.name}".${localField}`);
+    this.cols[to.__meta.name] = to;
 
     return this;
   }
@@ -363,10 +365,12 @@ class Chain<T> {
         if (prop && prop.type) {
           const tr = (this.cols[tableName].__meta.transform as any)[prop.type];
           if (tr) {
+            item[tableName] = item[tableName] || {};
             item[tableName][r] = tr.get(v);
           }
         }
 
+        item[tableName] = item[tableName] || {};
         if (item[tableName][r] === undefined) {
           item[tableName][r] = v;
         }
