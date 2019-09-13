@@ -7,25 +7,25 @@ declare module "async-eventemitter" {
   }
 
   export default class AsyncEventEmitter<T extends EventMap> extends EventEmitter {
-    emit: <E extends keyof T>(event: E, ...args: Parameters<T[E]>) => boolean;
-    first<E extends keyof T>(event: E, listener: T[E]): this;
-    at<E extends keyof T>(event: E, index: number, listener: T[E]): this;
-    before<E extends keyof T>(event: E, target: T[E], listener: T[E]): this;
-    after<E extends keyof T>(event: E, target: T[E], listener: T[E]): this;
+    emit<E extends keyof T>(event: E & string, ...args: Parameters<T[E]>): boolean;
+    first<E extends keyof T>(event: E & string, listener: T[E]): this;
+    at<E extends keyof T>(event: E & string, index: number, listener: T[E]): this;
+    before<E extends keyof T>(event: E & string, target: T[E], listener: T[E]): this;
+    after<E extends keyof T>(event: E & string, target: T[E], listener: T[E]): this;
 
     // https://github.com/andywer/typed-emitter/blob/master/index.d.ts
-    addListener<E extends keyof T>(event: E, listener: T[E]): this;
-    on<E extends keyof T>(event: E, listener: T[E]): this;
-    once<E extends keyof T>(event: E, listener: T[E]): this;
-    prependListener<E extends keyof T>(event: E, listener: T[E]): this;
-    prependOnceListener<E extends keyof T>(event: E, listener: T[E]): this;
+    addListener<E extends keyof T>(event: E & string, listener: T[E]): this;
+    on<E extends keyof T>(event: E & string, listener: T[E]): this;
+    once<E extends keyof T>(event: E & string, listener: T[E]): this;
+    prependListener<E extends keyof T>(event: E & string, listener: T[E]): this;
+    prependOnceListener<E extends keyof T>(event: E & string, listener: T[E]): this;
 
-    removeAllListeners(event?: keyof T): this;
-    removeListener<E extends (keyof T & string)>(event: E, listener: T[E]): this;
+    removeAllListeners(event?: keyof T & string): this;
+    removeListener<E extends keyof T>(event: E & string, listener: T[E]): this;
 
     eventNames(): Array<keyof T & string>;
-    listeners<E extends keyof T>(event: E): Array<T[E]>;
-    listenerCount(event: keyof T): number;
+    listeners<E extends keyof T>(event: E & string): Array<T[E]>;
+    listenerCount(event: keyof T & string): number;
 
     getMaxListeners(): number;
     setMaxListeners(maxListeners: number): this;
