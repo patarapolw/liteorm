@@ -52,6 +52,7 @@ export class Collection<T> extends AsyncEventEmitter<{
   public __meta: {
     primary: IPrimaryRow;
     prop: Partial<Record<keyof T, IPropRow>>;
+    fields: Array<keyof T | "_id">;
     unique?: string[][];
     transform: Record<SqliteExt, ITransformer<any>>;
   };
@@ -69,10 +70,20 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     this.db = db;
     this.name = name;
+    const fields: Array<keyof T | "_id"> = [];
+    if (primary.name) {
+      if (Array.isArray(primary.name)) {
+        fields.push(...primary.name);
+      } else {
+        fields.push(primary.name);
+      }
+    }
+    fields.push(...Object.keys(prop) as any[]);
 
     this.__meta = {
       primary,
       prop,
+      fields,
       unique,
       transform: {
         datetime: {
@@ -202,8 +213,10 @@ export class Collection<T> extends AsyncEventEmitter<{
       selectClause.push("*");
     } else {
       fields.forEach((f) => {
-        selectClause.push(`"${f}"`);
-      })
+        if (this.__meta.fields.includes(f)) {
+          selectClause.push(`"${f}"`);
+        }
+      });
     }
 
     const sql: ISql = {
@@ -239,14 +252,17 @@ export class Collection<T> extends AsyncEventEmitter<{
     const where = condToWhere(cond);
 
     for (let [k, v] of Object.entries<any>(set)) {
-      const { type } = (this.__meta.prop as any)[k];
-      const tr = type ? (this.__meta.transform as any)[type] : undefined;
-      if (tr) {
-        v = tr.set(v);
-      }
+      const prop = (this.__meta.prop as any)[k];
+      if (prop) {
+        const { type } = prop;
+        const tr = type ? (this.__meta.transform as any)[type] : undefined;
+        if (tr) {
+          v = tr.set(v);
+        }
 
-      setK.push(`"${k}" = ?`);
-      setV.push(v);
+        setK.push(`"${k}" = ?`);
+        setV.push(v);
+      }
     }
 
     const sql: ISql = {
