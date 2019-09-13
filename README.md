@@ -73,12 +73,12 @@ class DbCard {
 }
 
 const db = await sqlite.open(filename);
-const deck = await new Collection<DbDeck>(db, new DbDeck()).build();
-const source = await new Collection<DbSource>(db, new DbSource()).build();
-const template = await new Collection<DbTemplate>(db, new DbTemplate()).build();
-const note = await new Collection<DbNote>(db, new DbNote()).build();
-const media = await new Collection<DbMedia>(db, new DbMedia()).build();
-const card = await new Collection<DbCard>(db, new DbCard()).build();
+const deck = await new Collection(db, new DbDeck()).build();
+const source = await new Collection(db, new DbSource()).build();
+const template = await new Collection(db, new DbTemplate()).build();
+const note = await new Collection(db, new DbNote()).build();
+const media = await new Collection(db, new DbMedia()).build();
+const card = await new Collection(db, new DbCard()).build();
 
 note.on("pre-create", (p) => {
   p.entry.key = SparkMD5.hash(stringify(p.entry.data));

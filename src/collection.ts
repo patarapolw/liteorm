@@ -423,7 +423,6 @@ function condToWhere(cond: Record<string, any>): { clause: string, params: any[]
           params.push(v1);
           break;
         default:
-          k += "JSON";
           v = JSON.stringify(v);
           cList.push(`"${k}" = ?`);
           params.push(v);
