@@ -50,13 +50,14 @@ export class Collection<T> extends AsyncEventEmitter<{
   "delete": (data: ISql, callback?: () => void) => void
 }> {
   public __meta: {
-    db: sqlite.Database;
-    name: string;
     primary: IPrimaryRow;
     prop: Partial<Record<keyof T, IPropRow>>;
     unique?: string[][];
     transform: Record<SqliteExt, ITransformer<any>>;
   };
+
+  public db: sqlite.Database;
+  public name: string;
 
   constructor(
     db: sqlite.Database,
@@ -66,9 +67,10 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     const { name, primary, unique, prop } = (model as any).__meta;
 
+    this.db = db;
+    this.name = name;
+
     this.__meta = {
-      db,
-      name,
       primary,
       prop,
       unique,
@@ -108,13 +110,18 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
       if (v && v.type) {
+        let def: any = undefined;
+        if (v.default) {
+          def = this.transformEntry({[k]: v.default} as any)[k];
+        }
+
         col.push([
           `"${k}"`,
           typeMap[v.type] || "INTEGER",
           v.unique ? "UNIQUE" : "",
           v.null ? "" : "NOT NULL",
-          v.default ? (
-            typeof v.default === "string" ? `'${v.default.replace("'", "[']")}'` : v.default
+          def !== undefined ? (
+            typeof def === "string" ? `DEFAULT '${def.replace("'", "[']")}'` : `DEFAULT ${def}`
           ) : "",
           v.references ? `REFERENCES "${v.references}"` : ""
         ].join(" "));
@@ -138,12 +145,12 @@ export class Collection<T> extends AsyncEventEmitter<{
     }
 
     const sql: ISql = {
-      statement: `CREATE TABLE IF NOT EXISTS "${this.__meta.name}" (${col.join(",")})`,
+      statement: `CREATE TABLE IF NOT EXISTS "${this.name}" (${col.join(",")})`,
       params: []
     };
 
     await new Promise((resolve) => this.emit("build", sql, resolve));
-    await this.__meta.db.exec(sql.statement);
+    await this.db.exec(sql.statement);
 
     return this;
   }
@@ -169,14 +176,14 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     const sql = {
       statement: `
-      INSERT INTO "${this.__meta.name}" (${bracketed.map((el) => `"${el}"`).join(",")})
+      INSERT INTO "${this.name}" (${bracketed.map((el) => `"${el}"`).join(",")})
       VALUES (${values.map((_) => "?").join(",")})
       ${ignoreErrors ? "ON CONFLICT DO NOTHING" : ""}`,
       params: values
     };
 
     await new Promise((resolve) => this.emit("create", sql, resolve));
-    const r = await this.__meta.db.run(sql.statement, ...sql.params);
+    const r = await this.db.run(sql.statement, ...sql.params);
 
     return r.lastID;
   }
@@ -202,26 +209,14 @@ export class Collection<T> extends AsyncEventEmitter<{
     const sql: ISql = {
       statement: `
       SELECT ${selectClause.join(",")}
-      FROM "${this.__meta.name}"
+      FROM "${this.name}"
       ${where ? `WHERE ${where.clause}` : ""} ${postfix || ""}`,
       params: where ? where.params.map((el) => el === undefined ? null : el) : []
     };
 
     await new Promise((resolve) => this.emit("find", sql, resolve));
-    const r = (await this.__meta.db.all(sql.statement,
-    ...sql.params)).map((el) => {
-      for (const [k, v] of Object.entries(el)) {
-        const prop = (this.__meta.prop as any)[k];
-        if (prop && prop.type) {
-          const tr = (this.__meta.transform as any)[prop.type];
-          if (tr) {
-            el[k] = tr.get(v);
-          }
-        }
-      }
-
-      return el;
-    });
+    const r = (await this.db.all(sql.statement,
+    ...sql.params)).map(this.loadData);
 
     return r;
   }
@@ -256,7 +251,7 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     const sql: ISql = {
       statement: `
-      UPDATE "${this.__meta.name}"
+      UPDATE "${this.name}"
       SET ${setK.join(",")}
       ${where ? `WHERE ${where.clause}` : ""}`,
       params: [
@@ -266,7 +261,7 @@ export class Collection<T> extends AsyncEventEmitter<{
     }
 
     await new Promise((resolve) => this.emit("update", sql, resolve));
-    await this.__meta.db.run(sql.statement,
+    await this.db.run(sql.statement,
       ...sql.params);
   }
 
@@ -279,18 +274,52 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     const sql: ISql = {
       statement: `
-      DELETE FROM "${this.__meta.name}"
+      DELETE FROM "${this.name}"
       ${where ? `WHERE ${where.clause}` : ""}`,
       params: (where ? where.params.map((el) => el === undefined ? null : el) : [])
     }
 
     await new Promise((resolve) => this.emit("delete", sql, resolve));
-    await this.__meta.db.run(sql.statement,
+    await this.db.run(sql.statement,
       ...sql.params);
   }
 
   public chain(select?: Array<keyof T>): Chain<T> {
     return new Chain(this, select);
+  }
+
+  private loadData(data: any): Partial<T> {
+    for (const [k, v] of Object.entries(data)) {
+      const prop = (this.__meta.prop as any)[k];
+      if (prop && prop.type) {
+        const tr = (this.__meta.transform as any)[prop.type];
+        if (tr) {
+          data[k] = tr.get(v);
+        }
+      }
+    }
+
+    return data;
+  }
+
+  public transformEntry(entry: Partial<T>): Record<string, string | number | null> {
+    const output: Record<string, string | number | null> = {};
+
+    for (let [k, v] of Object.entries<any>(entry)) {
+      const prop = (this.__meta.prop as any)[k];
+      if (prop && prop.type) {
+        const tr = (this.__meta.transform as any)[prop.type];
+        if (tr) {
+          output[k] = tr.set(v);
+        }
+      }
+
+      if (output[k] === undefined) {
+        output[k] = v;
+      }
+    }
+
+    return output;
   }
 }
 
@@ -302,16 +331,16 @@ class Chain<T> {
   public from: string[] = [];
 
   constructor(firstCol: Collection<T>, firstSelect?: Array<keyof T>) {
-    this.cols[firstCol.__meta.name] = firstCol;
+    this.cols[firstCol.name] = firstCol;
     this.firstCol = firstCol;
 
     if (firstSelect) {
       for (const l of firstSelect) {
-        this.select.push(`"${firstCol.__meta.name}"."${l}" AS "${firstCol.__meta.name}__${l}"`);
+        this.select.push(`"${firstCol.name}"."${l}" AS "${firstCol.name}__${l}"`);
       }
     }
 
-    this.from.push(`FROM "${firstCol.__meta.name}"`);
+    this.from.push(`FROM "${firstCol.name}"`);
   }
 
   public join<U>(
@@ -323,12 +352,12 @@ class Chain<T> {
   ): this {
     if (select) {
       for (const r of select) {
-        this.select.push(`"${to.__meta.name}"."${r}" AS "${to.__meta.name}__${r}"`);
+        this.select.push(`"${to.name}"."${r}" AS "${to.name}__${r}"`);
       }
     }
 
-    this.from.push(`${type || ""} JOIN "${to.__meta.name}" ON "${foreignField}" = "${to.__meta.name}".${localField}`);
-    this.cols[to.__meta.name] = to;
+    this.from.push(`${type || ""} JOIN "${to.name}" ON "${foreignField}" = "${to.name}".${localField}`);
+    this.cols[to.name] = to;
 
     return this;
   }
@@ -355,7 +384,7 @@ class Chain<T> {
   ): Promise<Array<Record<string, Record<string, any>>>> {
     const sql = this.sql(cond, postfix);
 
-    return (await this.firstCol.__meta.db.all(sql.statement, sql.params)).map((c) => {
+    return (await this.firstCol.db.all(sql.statement, sql.params)).map((c) => {
       const item: Record<string, Record<string, any>> = {};
 
       for (const [k, v] of Object.entries<any>(c)) {

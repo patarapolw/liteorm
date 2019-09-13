@@ -1,6 +1,6 @@
 # liteorm
 
-Simple wrapper for `sqlite`; with typings based on TypeScript decorators, `reflect-metadata`; and event emitter. Focusing on MongoDB interop.
+Simple wrapper for `sqlite`; with typings based on TypeScript decorators, `reflect-metadata`; and `async-eventemitter`. Focusing on MongoDB interop.
 
 ## Usage
 
@@ -100,6 +100,8 @@ media.on("pre-update", (p) => {
   }
 });
 ```
+
+Joining (left and inner) is also implemented, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts#L261>
 
 For more, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts>
 
