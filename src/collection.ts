@@ -216,7 +216,7 @@ export class Collection<T> extends AsyncEventEmitter<{
 
     await new Promise((resolve) => this.emit("find", sql, resolve));
     const r = (await this.db.all(sql.statement,
-    ...sql.params)).map(this.loadData);
+    ...sql.params)).map((el) => this.loadData(el));
 
     return r;
   }
