@@ -8,7 +8,7 @@ function logType(target : any, key : string) {
 
 class Demo{ 
   @logType // apply property decorator
-  public attr1!: ArrayBuffer;
+  public attr1?: Demo[];
 
   public attr2 = "yes";
 }

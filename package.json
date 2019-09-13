@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
