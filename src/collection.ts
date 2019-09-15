@@ -1,6 +1,5 @@
 import sqlite from "sqlite";
-import "types-async-eventemitter";
-import AsyncEventEmitter from "async-eventemitter";
+import Emittery from "emittery";
 
 export type SqliteNative = "string" | "integer" | "float" | "binary";
 export type SqliteExt = "datetime" | "JSON";
@@ -29,25 +28,25 @@ export interface IPropRow {
   default?: any;
 }
 
-export class Collection<T> extends AsyncEventEmitter<{
-  "build": (data: ISql, callback?: () => void) => void,
-  "pre-create": (data: {entry: T, ignoreErrors: boolean}, callback?: () => void) => void,
-  "create": (data: ISql, callback?: () => void) => void,
-  "pre-find": (data: {
+export class Collection<T> extends Emittery.Typed<{
+  "build": ISql,
+  "pre-create": {entry: T, ignoreErrors: boolean},
+  "create": ISql,
+  "pre-find": {
     cond: Partial<Record<keyof T, any>>;
     fields?: Array<keyof T> | null;
     postfix?: string;
-  }, callback?: () => void) => void,
-  "find": (data: ISql, callback?: () => void) => void,
-  "pre-update": (data: {
+  },
+  "find": ISql,
+  "pre-update": {
     cond: Partial<Record<keyof T, any>>;
     set: Partial<Record<keyof T, any>>;
-  }, callback?: () => void) => void,
-  "update": (data: ISql, callback?: () => void) => void,
-  "pre-delete": (data: {
+  },
+  "update": ISql,
+  "pre-delete": {
     cond: Partial<Record<keyof T, any>>
-  }, callback?: () => void) => void,
-  "delete": (data: ISql, callback?: () => void) => void
+  },
+  "delete": ISql
 }> {
   public __meta: {
     primary: IPrimaryRow;
@@ -160,14 +159,14 @@ export class Collection<T> extends AsyncEventEmitter<{
       params: []
     };
 
-    await new Promise((resolve) => this.emit("build", sql, resolve));
+    await this.emit("build", sql);
     await this.db.exec(sql.statement);
 
     return this;
   }
 
   public async create(entry: T, ignoreErrors = false): Promise<number> {
-    await new Promise((resolve) => this.emit("pre-create", {entry, ignoreErrors}, resolve));
+    await this.emit("pre-create", {entry, ignoreErrors});
 
     const bracketed: string[] = [];
     const values: string[] = [];
@@ -193,7 +192,7 @@ export class Collection<T> extends AsyncEventEmitter<{
       params: values
     };
 
-    await new Promise((resolve) => this.emit("create", sql, resolve));
+    await this.emit("create", sql);
     const r = await this.db.run(sql.statement, ...sql.params);
 
     return r.lastID;
@@ -204,7 +203,7 @@ export class Collection<T> extends AsyncEventEmitter<{
     fields?: Array<keyof T> | null,
     postfix?: string
   ): Promise<Partial<T>[]> {
-    await new Promise((resolve) => this.emit("pre-find", {cond, fields, postfix}, resolve));
+    await this.emit("pre-find", {cond, fields, postfix});
 
     const where = condToWhere(cond);
 
@@ -227,7 +226,7 @@ export class Collection<T> extends AsyncEventEmitter<{
       params: where ? where.params.map((el) => el === undefined ? null : el) : []
     };
 
-    await new Promise((resolve) => this.emit("find", sql, resolve));
+    await this.emit("find", sql);
     const r = (await this.db.all(sql.statement,
     ...sql.params)).map((el) => this.loadData(el));
 
@@ -245,7 +244,7 @@ export class Collection<T> extends AsyncEventEmitter<{
     cond: Partial<Record<keyof T, any>>,
     set: Partial<Record<keyof T, any>>,
   ) {
-    await new Promise((resolve) => this.emit("pre-update", {cond, set}, resolve));
+    await this.emit("pre-update", {cond, set});
 
     const setK: string[] = [];
     const setV: any[] = [];
@@ -276,7 +275,7 @@ export class Collection<T> extends AsyncEventEmitter<{
       ]
     }
 
-    await new Promise((resolve) => this.emit("update", sql, resolve));
+    await this.emit("update", sql);
     await this.db.run(sql.statement,
       ...sql.params);
   }
@@ -284,7 +283,7 @@ export class Collection<T> extends AsyncEventEmitter<{
   public async delete(
     cond: Partial<Record<keyof T, any>>
   ) {
-    await new Promise((resolve) => this.emit("pre-delete", {cond}, resolve));
+    await this.emit("pre-delete", {cond});
 
     const where = condToWhere(cond);
 
@@ -295,7 +294,7 @@ export class Collection<T> extends AsyncEventEmitter<{
       params: (where ? where.params.map((el) => el === undefined ? null : el) : [])
     }
 
-    await new Promise((resolve) => this.emit("delete", sql, resolve));
+    await this.emit("delete", sql);
     await this.db.run(sql.statement,
       ...sql.params);
   }

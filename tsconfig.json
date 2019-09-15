@@ -17,9 +17,6 @@
     "declaration": true,
     "lib": ["es2015", "es7", "es6", "dom", "es2017"],
     "baseUrl": ".",
-    "types": [
-      "events"
-    ],
     "typeRoots": [
       "@types"
     ],
