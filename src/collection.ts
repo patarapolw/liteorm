@@ -1,5 +1,5 @@
 import sqlite from "sqlite";
-import "./types";
+import "types-async-eventemitter";
 import AsyncEventEmitter from "async-eventemitter";
 
 export type SqliteNative = "string" | "integer" | "float" | "binary";
