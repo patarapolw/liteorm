@@ -1,13 +1,12 @@
 # liteorm
 
-Simple wrapper for `sqlite`; with typings based on TypeScript decorators, `reflect-metadata`; and `async-eventemitter`. Focusing on MongoDB interop.
+A simple wrapper for [sqlite](sqlite); with typings based on [TypeScript decorators](https://www.typescriptlang.org/docs/handbook/decorators.html) and [reflect-metadata](https://www.npmjs.com/package/reflect-metadata). With async eventemitter ([emittery](https://www.npmjs.com/package/emittery)). Focusing on JSON, Date, and MongoDB interop.
 
 ## Usage
 
 ```typescript
 import { Table, primary, prop, Collection } from "liteorm";
 import sqlite from "sqlite";
-import SparkMD5 from "spark-md5";
 
 @Table({name: "deck"})
 class DbDeck {
@@ -23,7 +22,7 @@ class DbSource {
   @prop() created!: Date;
 }
 
-@Table<DbTemplate>({name: "template", unique: [["front", "back", "css", "js"]]})
+@Table({name: "template", unique: [["front", "back", "css", "js"]]})
 class DbTemplate {
   @primary({autoincrement: true}) _id?: number;
   @prop() name!: string;
@@ -80,23 +79,9 @@ const note = await new Collection(db, new DbNote()).build();
 const media = await new Collection(db, new DbMedia()).build();
 const card = await new Collection(db, new DbCard()).build();
 
-note.on("pre-create", (p) => {
-  p.entry.key = SparkMD5.hash(stringify(p.entry.data));
-});
-
-note.on("pre-update", (p) => {
-  if (p.set.data) {
-    p.set.key = SparkMD5.hash(stringify(p.set.data));
-  }
-});
-
-media.on("pre-create", (p) => {
-  p.entry.h = SparkMD5.ArrayBuffer.hash(p.entry.data);
-});
-
-media.on("pre-update", (p) => {
-  if (p.set.data) {
-    p.set.h = SparkMD5.ArrayBuffer.hash(p.set.data);
+note.on("pre-create", async (p) => {
+  if (p.entry.data && !p.entry.key) {
+    p.entry.key = await hashingFunction(p.entry.data);
   }
 });
 ```
@@ -110,3 +95,19 @@ For more, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts
 ```
 npm i liteorm
 ```
+
+## Caveats
+
+- Type `Number` by default is associated with `INTEGER`. To change it to `FLOAT`, use
+
+```typescript
+@prop({type: "float"}) f!: number;
+```
+
+- `BLOB` is associated with Type `ArrayBuffer`.
+
+```typescript
+@prop() data!: ArrayBuffer;
+```
+
+- `references`, i.e. Foreign Key, is currently implemented at `CREATE TABLE` only. Joins (chaining) still has to be done manually.
