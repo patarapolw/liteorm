@@ -1,2 +1,7 @@
-export { Collection } from "./collection";
-export { primary, prop, Table } from "./decorators";
+import { Db } from "./db";
+
+export * from "./collection";
+export * from "./decorators";
+export * from "./db";
+
+export default Db;

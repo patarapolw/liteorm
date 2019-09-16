@@ -1,13 +1,4 @@
-# liteorm
-
-A simple wrapper for [sqlite](sqlite); with typings based on [TypeScript decorators](https://www.typescriptlang.org/docs/handbook/decorators.html) and [reflect-metadata](https://www.npmjs.com/package/reflect-metadata). With async eventemitter ([emittery](https://www.npmjs.com/package/emittery)). Focusing on JSON, Date, and MongoDB interop.
-
-Also, support multiple SQLite databases, with cloned schemas or different schemas.
-
-## Usage
-
-```typescript
-import Db, { Table, primary, prop } from "liteorm";
+import Db, { Table, primary, prop } from "../src";
 import crypto from "crypto";
 
 @Table({name: "deck"})
@@ -93,30 +84,3 @@ class DbCard {
     }
   });
 })().catch(console.error);
-```
-
-Joining (left and inner) is also implemented, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts#L261>
-
-For more, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts>
-
-## Installation
-
-```
-npm i liteorm
-```
-
-## Caveats
-
-- Type `Number` by default is associated with `INTEGER`. To change it to `FLOAT`, use
-
-```typescript
-@prop({type: "float"}) f!: number;
-```
-
-- `BLOB` is associated with Type `ArrayBuffer`.
-
-```typescript
-@prop() data!: ArrayBuffer;
-```
-
-- `references`, i.e. Foreign Key, is currently implemented at `CREATE TABLE` only. Joins (chaining) still has to be done manually.
