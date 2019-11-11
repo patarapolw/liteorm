@@ -1,9 +1,9 @@
 {
   "name": "liteorm",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
   "scripts": {
     "prepublishOnly": "npm run build",
     "test": "ts-mocha tests/**/*.spec.ts",

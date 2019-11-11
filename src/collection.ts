@@ -358,6 +358,10 @@ class Chain<T> {
     this.from.push(`FROM "${firstCol.name}"`);
   }
 
+  get db() {
+    return this.firstCol.db;
+  }
+
   public join<U>(
     to: Collection<U>,
     foreignField: string,
@@ -399,33 +403,37 @@ class Chain<T> {
   ): Promise<Array<Record<string, Record<string, any>>>> {
     const sql = this.sql(cond, postfix);
 
-    return (await this.firstCol.db.all(sql.statement, sql.params)).map((c) => {
-      const item: Record<string, Record<string, any>> = {};
+    return (await this.db.all(sql.statement, sql.params)).map((c) => {
+      return this.transformRow(c);
+    });
+  }
 
-      for (const [k, v] of Object.entries<any>(c)) {
-        const [tableName, r] = k.split("__");
+  public transformRow(row: any) {
+    const item: Record<string, Record<string, any>> = {};
 
-        const prop = (this.cols[tableName].__meta.prop as any)[r];
-        if (prop && prop.type) {
-          const tr = (this.cols[tableName].__meta.transform as any)[prop.type];
-          if (tr) {
-            item[tableName] = item[tableName] || {};
-            item[tableName][r] = tr.get(v);
-          }
-        }
+    for (const [k, v] of Object.entries<any>(row)) {
+      const [tableName, r] = k.split("__");
 
-        item[tableName] = item[tableName] || {};
-        if (item[tableName][r] === undefined) {
-          item[tableName][r] = v;
+      const prop = (this.cols[tableName].__meta.prop as any)[r];
+      if (prop && prop.type) {
+        const tr = (this.cols[tableName].__meta.transform as any)[prop.type];
+        if (tr) {
+          item[tableName] = item[tableName] || {};
+          item[tableName][r] = tr.get(v);
         }
       }
-      
-      return item;
-    });
+
+      item[tableName] = item[tableName] || {};
+      if (item[tableName][r] === undefined) {
+        item[tableName][r] = v;
+      }
+    }
+    
+    return item;
   }
 }
 
-function condToWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {
+export function condToWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {
   const cList: string[] = [];
   const params: any[] = [];
 
