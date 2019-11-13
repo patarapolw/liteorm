@@ -30,18 +30,18 @@ export declare class Collection<T> extends Emittery.Typed<{
     };
     "create": ISql;
     "pre-find": {
-        cond: Record<string, any>;
+        cond: string | Record<string, any>;
         fields?: string[] | null;
         postfix?: string;
     };
     "find": ISql;
     "pre-update": {
-        cond: Record<string, any>;
+        cond: string | Record<string, any>;
         set: Partial<T>;
     };
     "update": ISql;
     "pre-delete": {
-        cond: Record<string, any>;
+        cond: string | Record<string, any>;
     };
     "delete": ISql;
 }> {
@@ -57,7 +57,7 @@ export declare class Collection<T> extends Emittery.Typed<{
     constructor(db: sqlite.Database, model: T);
     build(): Promise<this>;
     create(entry: T, ignoreErrors?: boolean): Promise<number>;
-    find(cond: Record<string, any>, fields?: string[] | null, postfix?: string): Promise<Partial<T>[]>;
+    find(cond: string | Record<string, any>, fields?: string[] | null, postfix?: string): Promise<Partial<T>[]>;
     get(cond: Record<string, any>, fields?: string[]): Promise<Partial<T> | null>;
     update(cond: Record<string, any>, set: Partial<T>): Promise<void>;
     delete(cond: Record<string, any>): Promise<void>;

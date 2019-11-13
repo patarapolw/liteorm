@@ -20,11 +20,14 @@
   },
   "dependencies": {
     "@types/bluebird-global": "^3.5.12",
+    "@types/uuid": "^3.4.6",
     "bluebird": "^3.5.5",
     "bluebird-global": "^1.0.1",
     "emittery": "^0.4.1",
+    "moment": "^2.24.0",
     "reflect-metadata": "^0.1.13",
-    "sqlite": "^3.0.3"
+    "sqlite": "^3.0.3",
+    "uuid": "^3.3.3"
   },
   "devDependencies": {
     "@types/node": "^12.7.5",

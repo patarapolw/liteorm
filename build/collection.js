@@ -4,7 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const emittery_1 = __importDefault(require("emittery"));
-const cond_1 = require("./cond");
+const cond_1 = __importDefault(require("./cond"));
 class Collection extends emittery_1.default.Typed {
     constructor(db, model) {
         super();
@@ -122,7 +122,7 @@ class Collection extends emittery_1.default.Typed {
     }
     async find(cond, fields, postfix) {
         await this.emit("pre-find", { cond, fields, postfix });
-        const where = cond_1.condToWhere(cond);
+        const where = cond_1.default(cond);
         const selectClause = [];
         if (!fields) {
             selectClause.push("*");
@@ -153,7 +153,7 @@ class Collection extends emittery_1.default.Typed {
         await this.emit("pre-update", { cond, set });
         const setK = [];
         const setV = [];
-        const where = cond_1.condToWhere(cond);
+        const where = cond_1.default(cond);
         for (let [k, v] of Object.entries(set)) {
             const prop = this.__meta.prop[k];
             if (prop) {
@@ -181,7 +181,7 @@ class Collection extends emittery_1.default.Typed {
     }
     async delete(cond) {
         await this.emit("pre-delete", { cond });
-        const where = cond_1.condToWhere(cond);
+        const where = cond_1.default(cond);
         const sql = {
             statement: `
       DELETE FROM "${this.name}"
@@ -266,12 +266,12 @@ class Chain {
         return this;
     }
     sql(cond, postfix) {
-        const where = cond ? cond_1.condToWhere(cond) : null;
+        const where = cond ? cond_1.default(cond) : null;
         return {
             statement: `
       SELECT ${Object.entries(this.select).map(([k, v]) => `${k} AS "${v}"`).join(",")}
       ${this.from.join("\n")}
-      ${where ? where.clause : ""}
+      ${where ? `WHERE ${where.clause}` : ""}
       ${postfix || ""}`,
             params: where ? where.params : []
         };

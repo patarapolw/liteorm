@@ -1,6 +1,6 @@
 import sqlite from "sqlite";
 import Emittery from "emittery";
-import { condToWhere } from "./cond";
+import parseCond from "./cond";
 
 export type SqliteNative = "string" | "integer" | "float" | "binary";
 export type SqliteExt = "datetime" | "JSON";
@@ -34,18 +34,18 @@ export class Collection<T> extends Emittery.Typed<{
   "pre-create": {entry: T, ignoreErrors: boolean},
   "create": ISql,
   "pre-find": {
-    cond: Record<string, any>;
+    cond: string | Record<string, any>;
     fields?: string[] | null;
     postfix?: string;
   },
   "find": ISql,
   "pre-update": {
-    cond: Record<string, any>;
+    cond: string | Record<string, any>;
     set: Partial<T>;
   },
   "update": ISql,
   "pre-delete": {
-    cond: Record<string, any>;
+    cond: string | Record<string, any>;
   },
   "delete": ISql
 }> {
@@ -200,13 +200,13 @@ export class Collection<T> extends Emittery.Typed<{
   }
 
   public async find(
-    cond: Record<string, any>,
+    cond: string | Record<string, any>,
     fields?: string[] | null,
     postfix?: string
   ): Promise<Partial<T>[]> {
     await this.emit("pre-find", {cond, fields, postfix});
 
-    const where = condToWhere(cond);
+    const where = parseCond(cond);
 
     const selectClause: string[] = [];
     if (!fields) {
@@ -251,7 +251,7 @@ export class Collection<T> extends Emittery.Typed<{
 
     const setK: string[] = [];
     const setV: any[] = [];
-    const where = condToWhere(cond);
+    const where = parseCond(cond);
 
     for (let [k, v] of Object.entries<any>(set)) {
       const prop = (this.__meta.prop as any)[k];
@@ -288,7 +288,7 @@ export class Collection<T> extends Emittery.Typed<{
   ) {
     await this.emit("pre-delete", {cond});
 
-    const where = condToWhere(cond);
+    const where = parseCond(cond);
 
     const sql: ISql = {
       statement: `
@@ -400,13 +400,13 @@ class Chain<T> {
     cond?: Record<string, any>, 
     postfix?: string
   ): ISql {
-    const where = cond ? condToWhere(cond) : null;
+    const where = cond ? parseCond(cond) : null;
 
     return {
       statement: `
       SELECT ${Object.entries(this.select).map(([k, v]) => `${k} AS "${v}"`).join(",")}
       ${this.from.join("\n")}
-      ${where ? where.clause : ""}
+      ${where ? `WHERE ${where.clause}` : ""}
       ${postfix || ""}`,
       params: where ? where.params : []
     };
