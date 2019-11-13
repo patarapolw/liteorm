@@ -1,1 +1,1 @@
-linguist-vendored build/*
+build/* linguist-vendored
