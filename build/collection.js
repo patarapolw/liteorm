@@ -124,7 +124,7 @@ class Collection extends emittery_1.default.Typed {
         await this.emit("pre-find", { cond, fields, postfix });
         const where = cond_1.default(cond);
         const selectClause = [];
-        if (!fields) {
+        if (!fields || fields.length === 0) {
             selectClause.push("*");
         }
         else {

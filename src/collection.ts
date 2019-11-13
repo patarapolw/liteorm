@@ -209,7 +209,7 @@ export class Collection<T> extends Emittery.Typed<{
     const where = parseCond(cond);
 
     const selectClause: string[] = [];
-    if (!fields) {
+    if (!fields || fields.length === 0) {
       selectClause.push("*");
     } else {
       fields.forEach((f) => {
