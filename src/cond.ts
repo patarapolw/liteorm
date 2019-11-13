@@ -19,11 +19,11 @@ function parseCondBasic(cond: Record<string, any>): { clause: string, params: an
       switch (v0) {
         case "$like":
           cList.push(`${k} LIKE ?`);
-          params.push(v1);
+          params.push(JSON.stringify(v1));
           break;
         case "$nlike":
           cList.push(`${k} NOT LIKE ?`);
-          params.push(v1);
+          params.push(JSON.stringify(v1));
           break;
         case "$substr":
           cList.push(`${k} LIKE ?`);
