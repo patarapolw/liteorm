@@ -101,7 +101,7 @@ To query, you have to supply both condition `{"a.b": "c"}` and field selector `[
 
 ## JSON support
 
-JSON querying is supported via JSON1 extension. I make it easy to query using dot notation, just like MongoDB.
+JSON querying is supported via JSON1 extension. I made it easy to query using dot notation, just like MongoDB.
 
 ## Joining aka `chain()`
 
