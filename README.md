@@ -95,9 +95,17 @@ class DbCard {
 })().catch(console.error);
 ```
 
-Joining (left and inner) is also implemented, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts#L261>
+## Querying data
 
-For more, see <https://github.com/patarapolw/r2r-sqlite/blob/master/src/index.ts>
+To query, you have to supply both condition `{"a.b": "c"}` and field selector `["a.b AS ab"]`. If no field is supplied, all fields will be selected.
+
+## JSON support
+
+JSON querying is supported via JSON1 extension. I make it easy to query using dot notation, just like MongoDB.
+
+## Joining aka `chain()`
+
+Joining (left and inner) is implemented through `chain()` method. The row name will now be `table__row` (in order not to interfere with dot notation), which still support JSON and Date conversion.
 
 ## Installation
 

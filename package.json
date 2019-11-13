@@ -6,8 +6,7 @@
   "types": "build/index.d.ts",
   "scripts": {
     "prepublishOnly": "npm run build",
-    "test": "ts-mocha tests/**/*.spec.ts",
-    "build": "tsc -p tsconfig.lib.json"
+    "build": "tsc"
   },
   "keywords": [
     "sqlite",

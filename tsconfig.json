@@ -21,19 +21,10 @@
     "types": [
       "node"
     ],
-    "typeRoots": [
-      "@types"
-    ],
-    "paths": {
-      "@/*": [
-        "src/*"
-      ]
-    }
+    "rootDir": "src"
   },
   "include": [
-    "src/**/*",
-    "tests/**/*",
-    "scripts/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",

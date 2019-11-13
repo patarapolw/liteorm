@@ -1,5 +1,6 @@
 import sqlite from "sqlite";
 import Emittery from "emittery";
+import { condToWhere } from "./cond";
 
 export type SqliteNative = "string" | "integer" | "float" | "binary";
 export type SqliteExt = "datetime" | "JSON";
@@ -33,18 +34,18 @@ export class Collection<T> extends Emittery.Typed<{
   "pre-create": {entry: T, ignoreErrors: boolean},
   "create": ISql,
   "pre-find": {
-    cond: Partial<Record<keyof T, any>>;
-    fields?: Array<keyof T> | null;
+    cond: Record<string, any>;
+    fields?: string[] | null;
     postfix?: string;
   },
   "find": ISql,
   "pre-update": {
-    cond: Partial<Record<keyof T, any>>;
-    set: Partial<Record<keyof T, any>>;
+    cond: Record<string, any>;
+    set: Partial<T>;
   },
   "update": ISql,
   "pre-delete": {
-    cond: Partial<Record<keyof T, any>>
+    cond: Record<string, any>;
   },
   "delete": ISql
 }> {
@@ -199,8 +200,8 @@ export class Collection<T> extends Emittery.Typed<{
   }
 
   public async find(
-    cond: Partial<Record<keyof T, any>>,
-    fields?: Array<keyof T> | null,
+    cond: Record<string, any>,
+    fields?: string[] | null,
     postfix?: string
   ): Promise<Partial<T>[]> {
     await this.emit("pre-find", {cond, fields, postfix});
@@ -212,8 +213,10 @@ export class Collection<T> extends Emittery.Typed<{
       selectClause.push("*");
     } else {
       fields.forEach((f) => {
-        if (this.__meta.fields.includes(f)) {
-          selectClause.push(`"${f}"`);
+        const fn = f.split(".");
+
+        if (this.__meta.fields.includes(fn[0] as any)) {
+          selectClause.push(f);
         }
       });
     }
@@ -234,15 +237,15 @@ export class Collection<T> extends Emittery.Typed<{
   }
 
   public async get(
-    cond: Partial<Record<keyof T, any>>,
-    fields?: Array<keyof T> 
+    cond: Record<string, any>,
+    fields?: string[] 
   ): Promise<Partial<T> | null> {
     return (await this.find(cond, fields, "LIMIT 1"))[0] || null;
   }
 
   public async update(
-    cond: Partial<Record<keyof T, any>>,
-    set: Partial<Record<keyof T, any>>,
+    cond: Record<string, any>,
+    set: Partial<T>,
   ) {
     await this.emit("pre-update", {cond, set});
 
@@ -281,7 +284,7 @@ export class Collection<T> extends Emittery.Typed<{
   }
 
   public async delete(
-    cond: Partial<Record<keyof T, any>>
+    cond: Record<string, any>
   ) {
     await this.emit("pre-delete", {cond});
 
@@ -299,7 +302,7 @@ export class Collection<T> extends Emittery.Typed<{
       ...sql.params);
   }
 
-  public chain(select?: Array<keyof T>): Chain<T> {
+  public chain(select?: Array<keyof T> | Record<keyof T, string>): Chain<T> {
     return new Chain(this, select);
   }
 
@@ -342,16 +345,22 @@ class Chain<T> {
   public cols: Record<string, Collection<any>> = {};
   public firstCol: Collection<T>;
   
-  public select: string[] = [];
+  public select: Record<string, string> = {};
   public from: string[] = [];
 
-  constructor(firstCol: Collection<T>, firstSelect?: Array<keyof T>) {
+  constructor(firstCol: Collection<T>, firstSelect?: Array<keyof T> | Record<keyof T, string>) {
     this.cols[firstCol.name] = firstCol;
     this.firstCol = firstCol;
 
     if (firstSelect) {
-      for (const l of firstSelect) {
-        this.select.push(`"${firstCol.name}"."${l}" AS "${firstCol.name}__${l}"`);
+      if (Array.isArray(firstSelect)) {
+        for (const l of firstSelect) {
+          this.select[`"${firstCol.name}"."${l}"`] = `${firstCol.name}__${l}`;
+        }
+      } else {
+        for (const [l, v] of Object.entries<string>(firstSelect)) {
+          this.select[`"${firstCol.name}"."${l}"`] = v;
+        }
       }
     }
 
@@ -366,12 +375,18 @@ class Chain<T> {
     to: Collection<U>,
     foreignField: string,
     localField: keyof T = "_id" as any,
-    select?: Array<keyof U> | null,
+    select?: Array<keyof U> | Record<keyof U, string> | null,
     type?: "left" | "inner"
   ): this {
     if (select) {
-      for (const r of select) {
-        this.select.push(`"${to.name}"."${r}" AS "${to.name}__${r}"`);
+      if (Array.isArray(select)) {
+        for (const l of select) {
+          this.select[`"${to.name}"."${l}"`] = `${to.name}__${l}`;
+        }
+      } else {
+        for (const [l, v] of Object.entries<string>(select)) {
+          this.select[`"${to.name}"."${l}"`] = v;
+        }
       }
     }
 
@@ -389,7 +404,7 @@ class Chain<T> {
 
     return {
       statement: `
-      SELECT ${this.select.join(",")}
+      SELECT ${Object.entries(this.select).map(([k, v]) => `${k} AS "${v}"`).join(",")}
       ${this.from.join("\n")}
       ${where ? where.clause : ""}
       ${postfix || ""}`,
@@ -431,62 +446,4 @@ class Chain<T> {
     
     return item;
   }
-}
-
-export function condToWhere(cond: Record<string, any>): { clause: string, params: any[] } | null {
-  const cList: string[] = [];
-  const params: any[] = [];
-
-  for (let [k, v] of Object.entries(cond)) {
-    if (v && (v.constructor === {}.constructor || Array.isArray(v))) {
-      const v0 = Object.keys(v)[0];
-      const v1 = v[v0];
-      switch (v0) {
-        case "$like":
-          cList.push(`"${k}" LIKE ?`);
-          params.push(v1);
-          break;
-        case "$exists":
-          cList.push(`"${k}" IS ${v1 ? "NOT NULL" : "NULL"}`);
-          break;
-        case "$in":
-          if (v1.length > 1) {
-            cList.push(`"${k}" IN (${v1.map((_: any) => "?").join(",")})`)
-            params.push(...v1);
-          } else {
-            cList.push(`"${k}" = ?`);
-            params.push(v1[0]);
-          }
-          break;
-        case "$gt":
-          cList.push(`"${k}" > ?`);
-          params.push(v1);
-          break;
-        case "$gte":
-          cList.push(`"${k}" >= ?`);
-          params.push(v1);
-          break;
-        case "$lt":
-          cList.push(`"${k}" < ?`);
-          params.push(v1);
-          break;
-        case "$lte":
-          cList.push(`"${k}" <= ?`);
-          params.push(v1);
-          break;
-        default:
-          v = JSON.stringify(v);
-          cList.push(`"${k}" = ?`);
-          params.push(v);
-      }
-    } else {
-      cList.push(`"${k}" = ?`);
-      params.push(v);
-    }
-  }
-
-  return cList.length > 0 ? {
-    clause: cList.join(" AND "),
-    params
-  } : null;
 }
