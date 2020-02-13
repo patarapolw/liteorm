@@ -1,449 +1,630 @@
-import sqlite from "sqlite";
-import Emittery from "emittery";
-import parseCond from "./cond";
+// eslint-disable-next-line no-unused-vars
+import sqlite from 'sqlite'
+import Emittery from 'emittery'
+import { ISqliteMeta, IPropRow } from './decorators'
 
-export type SqliteNative = "string" | "integer" | "float" | "binary";
-export type SqliteExt = "datetime" | "JSON";
+export type SqliteNative = 'string' | 'integer' | 'float' | 'binary'
+export type SqliteExt = 'datetime' | 'JSON' | 'strArray'
 
 interface ITransformer<T> {
   get: (repr: string | null) => T | null;
   set: (data: T) => string | null;
 }
 
-interface ISql {
-  statement: string;
-  params: any[];
-}
-
-export interface IPrimaryRow {
-  name: string | string[];
-  type?: SqliteNative;
-  autoincrement?: boolean;
-}
-
-export interface IPropRow {
-  type: SqliteNative | SqliteExt,
-  unique?: boolean;
-  null?: boolean;
-  references?: string;
-  default?: any;
+export interface ISql {
+  $statement: string;
+  $params: any[];
 }
 
 export class Collection<T> extends Emittery.Typed<{
-  "build": ISql,
-  "pre-create": {entry: T, ignoreErrors: boolean},
-  "create": ISql,
-  "pre-find": {
+  'build': ISql,
+  'pre-create': {
+    entry: T & {
+      createdAt?: Date
+      updatedAt?: Date
+    }, ignoreErrors: boolean
+  },
+  'create': ISql,
+  'pre-find': {
     cond: string | Record<string, any>;
     fields?: string[] | null;
     postfix?: string;
   },
-  "find": ISql,
-  "pre-update": {
+  'find': ISql,
+  'pre-update': {
     cond: string | Record<string, any>;
-    set: Partial<T>;
+    set: Partial<T & {
+      createdAt?: Date
+      updatedAt?: Date
+    }>;
   },
-  "update": ISql,
-  "pre-delete": {
+  'update': ISql,
+  'pre-delete': {
     cond: string | Record<string, any>;
   },
-  "delete": ISql
+  'delete': ISql
 }> {
-  public __meta: {
-    primary: IPrimaryRow;
-    prop: Partial<Record<keyof T, IPropRow>>;
-    fields: Array<keyof T | "_id">;
-    unique?: string[][];
-    transform: Record<SqliteExt, ITransformer<any>>;
-  };
+  __meta: {
+    fields: Array<keyof T | '_id'>
+    transform: Record<SqliteExt, ITransformer<any>>
+  } & ISqliteMeta<T & {
+    createdAt?: Date
+    updatedAt?: Date
+  }>
 
-  public db: sqlite.Database;
-  public name: string;
+  db: sqlite.Database;
+  name: string;
 
   constructor(
     db: sqlite.Database,
     model: T
   ) {
-    super();
+    super()
 
-    const { name, primary, unique, prop } = (model as any).__meta;
+    const { name, primary, unique, prop, createdAt, updatedAt } = (model as any).__meta as ISqliteMeta<T>
 
-    this.db = db;
-    this.name = name;
-    const fields: Array<keyof T | "_id"> = [];
+    this.db = db
+    this.name = name
+    const fields: Array<keyof T | '_id'> = []
     if (primary.name) {
       if (Array.isArray(primary.name)) {
-        fields.push(...primary.name);
+        fields.push(...primary.name)
       } else {
-        fields.push(primary.name);
+        fields.push(primary.name)
       }
     }
-    fields.push(...Object.keys(prop) as any[]);
+    fields.push(...Object.keys(prop) as any[])
 
     this.__meta = {
+      name,
       primary,
-      prop,
+      prop: {
+        ...prop,
+        createdAt: createdAt ? { type: 'datetime', null: false, default: () => new Date() } : undefined,
+        updatedAt: updatedAt ? { type: 'datetime', null: false, default: () => new Date() } : undefined
+      },
       fields,
       unique,
       transform: {
         datetime: {
-          get: (repr) => repr ? new Date(repr) : null,
-          set: (data) => data ? data.toISOString() : null
+          get: (repr) => repr ? new Date(JSON.parse(repr).$milli) : null,
+          set: (d) => d ? JSON.stringify({ $string: d.toISOString(), $milli: +d }) : null
         },
         JSON: {
           get: (repr) => repr ? JSON.parse(repr) : null,
           set: (data) => data ? JSON.stringify(data) : null
+        },
+        strArray: {
+          get: (repr) => repr ? repr.trim().split('\x1f') : null,
+          set: (d) => d ? '\x1f' + d.join('\x1f') + '\x1f' : null
         }
-      }
+      },
+      createdAt,
+      updatedAt
+    }
+
+    if (updatedAt) {
+      this.on('pre-update', ({ set }) => {
+        set.updatedAt = set.updatedAt || new Date()
+      })
     }
   }
 
-  public async build() {
+  async build() {
     const typeMap: Record<SqliteNative | SqliteExt, string> = {
-      string: "TEXT",
-      integer: "INTEGER",
-      float: "FLOAT",
-      binary: "BLOB",
-      datetime: "TEXT",
-      JSON: "TEXT"
+      string: 'TEXT',
+      integer: 'INTEGER',
+      float: 'FLOAT',
+      binary: 'BLOB',
+      datetime: 'JSON',
+      JSON: 'JSON',
+      strArray: 'TEXT'
     }
 
-    const col: string[] = [];
+    const col: string[] = []
 
     if (this.__meta.primary.type) {
       col.push([
         `"${this.__meta.primary.name}"`,
-        typeMap[this.__meta.primary.type] || "INTEGER",
-        "PRIMARY KEY",
-        this.__meta.primary.autoincrement ? "AUTOINCREMENT" : ""
-      ].join(" "))
+        typeMap[this.__meta.primary.type] || 'INTEGER',
+        'PRIMARY KEY',
+        this.__meta.primary.autoincrement ? 'AUTOINCREMENT' : ''
+      ].join(' '))
     }
 
     for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
       if (v && v.type) {
-        let def: any = undefined;
+        let def: any
         if (v.default) {
-          def = this.transformEntry({[k]: v.default} as any)[k];
+          if (typeof v.default === 'function') {
+            def = this.transformEntry({ [k]: v.default() } as any)[k]
+          } else {
+            def = this.transformEntry({ [k]: v.default } as any)[k]
+          }
         }
 
         col.push([
           `"${k}"`,
-          typeMap[v.type] || "INTEGER",
-          v.unique ? "UNIQUE" : "",
-          v.null ? "" : "NOT NULL",
+          typeMap[v.type] || 'INTEGER',
+          v.unique ? 'UNIQUE' : '',
+          v.null ? '' : 'NOT NULL',
           def !== undefined ? (
-            typeof def === "string" ? `DEFAULT '${def.replace("'", "[']")}'` : `DEFAULT ${def}`
-          ) : "",
-          v.references ? `REFERENCES "${v.references}"` : ""
-        ].join(" "));
+            typeof def === 'string' ? `DEFAULT '${def.replace("'", "[']")}'` : `DEFAULT ${def}`
+          ) : '',
+          v.references ? `REFERENCES "${v.references}"` : ''
+        ].join(' '))
       }
     }
 
     if (Array.isArray(this.__meta.primary.name)) {
       col.push([
-        "PRIMARY KEY",
-        `(${this.__meta.primary.name.join(",")})`
-      ].join(" "));
+        'PRIMARY KEY',
+        `(${this.__meta.primary.name.join(',')})`
+      ].join(' '))
     }
 
     if (this.__meta.unique && this.__meta.unique.length > 0) {
       this.__meta.unique.forEach((ss) => {
         col.push([
-          "UNIQUE",
-          `(${ss.join(",")})`
-        ].join(" "))
+          'UNIQUE',
+          `(${ss.join(',')})`
+        ].join(' '))
       })
     }
 
     const sql: ISql = {
-      statement: `CREATE TABLE IF NOT EXISTS "${this.name}" (${col.join(",")})`,
-      params: []
-    };
+      $statement: `CREATE TABLE IF NOT EXISTS "${this.name}" (${col.join(',')})`,
+      $params: []
+    }
 
-    await this.emit("build", sql);
-    await this.db.exec(sql.statement);
+    await this.emit('build', sql)
+    await this.db.exec(sql.$statement)
 
-    return this;
+    return this
   }
 
-  public async create(entry: T, ignoreErrors = false): Promise<number> {
-    await this.emit("pre-create", {entry, ignoreErrors});
+  async create(entry: T, ignoreErrors = false): Promise<number> {
+    await this.emit('pre-create', { entry, ignoreErrors })
 
-    const bracketed: string[] = [];
-    const values: string[] = [];
+    const bracketed: string[] = []
+    const values: string[] = []
 
     for (let [k, v] of Object.entries(entry)) {
-      const prop = (this.__meta.prop as any)[k];
+      const prop = (this.__meta.prop as any)[k]
       if (prop && prop.type) {
-        const tr = (this.__meta.transform as any)[prop.type];
+        const tr = (this.__meta.transform as any)[prop.type]
         if (tr) {
-          v = tr.set(v);
+          v = tr.set(v)
         }
       }
 
-      bracketed.push(k);
-      values.push(v);
+      bracketed.push(k)
+      values.push(v)
     }
 
     const sql = {
-      statement: `
-      INSERT INTO "${this.name}" (${bracketed.map((el) => `"${el}"`).join(",")})
-      VALUES (${values.map((_) => "?").join(",")})
-      ${ignoreErrors ? "ON CONFLICT DO NOTHING" : ""}`,
-      params: values
-    };
+      $statement: `
+      INSERT INTO "${this.name}" (${bracketed.map((el) => `"${el}"`).join(',')})
+      VALUES (${values.map((_) => '?').join(',')})
+      ${ignoreErrors ? 'ON CONFLICT DO NOTHING' : ''}`,
+      $params: values
+    }
 
-    await this.emit("create", sql);
-    const r = await this.db.run(sql.statement, ...sql.params);
+    await this.emit('create', sql)
+    const r = await this.db.run(sql.$statement, ...sql.$params)
 
-    return r.lastID;
+    return r.lastID
   }
 
-  public async find(
-    cond: string | Record<string, any>,
+  /**
+   * 
+   * @param cond Put in `{ $statement: string, $params: any[] }` to directly use SQL
+   * @param fields Put in empty array or `null` to select all fields
+   * @param postfix Put in stuff like `ORDER BY` or `LIMIT` to enhance queries
+   */
+  async find(
+    cond: Record<string, any>,
     fields?: string[] | null,
     postfix?: string
   ): Promise<Partial<T>[]> {
-    await this.emit("pre-find", {cond, fields, postfix});
+    await this.emit('pre-find', { cond, fields, postfix })
 
-    const where = parseCond(cond);
+    const where = _parseCond(cond)
 
-    const selectClause: string[] = [];
+    const selectClause: string[] = []
     if (!fields || fields.length === 0) {
-      selectClause.push("*");
+      selectClause.push('*')
     } else {
       fields.forEach((f) => {
-        const fn = f.split(".");
+        const fn = f.split('.')
 
         if (this.__meta.fields.includes(fn[0] as any)) {
-          selectClause.push(f);
+          selectClause.push(f)
         }
-      });
+      })
     }
 
     const sql: ISql = {
-      statement: `
-      SELECT ${selectClause.join(",")}
+      $statement: `
+      SELECT ${selectClause.join(',')}
       FROM "${this.name}"
-      ${where ? `WHERE ${where.clause}` : ""} ${postfix || ""}`,
-      params: where ? where.params.map((el) => el === undefined ? null : el) : []
-    };
+      ${where ? `WHERE ${where.$statement}` : ''} ${postfix || ''}`,
+      $params: where ? where.$params.map((el) => el === undefined ? null : el) : []
+    }
 
-    await this.emit("find", sql);
-    const r = (await this.db.all(sql.statement,
-    ...sql.params)).map((el) => this.loadData(el));
+    await this.emit('find', sql)
+    const r = (await this.db.all(sql.$statement,
+      ...sql.$params)).map((el) => this._loadData(el))
 
-    return r;
+    return r
   }
 
-  public async get(
+  async get(
     cond: Record<string, any>,
-    fields?: string[] 
+    fields?: string[]
   ): Promise<Partial<T> | null> {
-    return (await this.find(cond, fields, "LIMIT 1"))[0] || null;
+    return (await this.find(cond, fields, 'LIMIT 1'))[0] || null
   }
 
-  public async update(
+  async update(
     cond: Record<string, any>,
-    set: Partial<T>,
+    set: Partial<T>
   ) {
-    await this.emit("pre-update", {cond, set});
+    await this.emit('pre-update', { cond, set })
 
-    const setK: string[] = [];
-    const setV: any[] = [];
-    const where = parseCond(cond);
+    const setK: string[] = []
+    const setV: any[] = []
+    const where = _parseCond(cond)
 
     for (let [k, v] of Object.entries<any>(set)) {
-      const prop = (this.__meta.prop as any)[k];
+      const prop = (this.__meta.prop as any)[k]
       if (prop) {
-        const { type } = prop;
-        const tr = type ? (this.__meta.transform as any)[type] : undefined;
+        const { type } = prop
+        const tr = type ? (this.__meta.transform as any)[type] : undefined
         if (tr) {
-          v = tr.set(v);
+          v = tr.set(v)
         }
 
-        setK.push(`"${k}" = ?`);
-        setV.push(v);
+        setK.push(`"${k}" = ?`)
+        setV.push(v)
       }
     }
 
     const sql: ISql = {
-      statement: `
+      $statement: `
       UPDATE "${this.name}"
-      SET ${setK.join(",")}
-      ${where ? `WHERE ${where.clause}` : ""}`,
-      params: [
+      SET ${setK.join(',')}
+      ${where ? `WHERE ${where.$statement}` : ''}`,
+      $params: [
         ...setV,
-        ...(where ? where.params.map((el) => el === undefined ? null : el) : [])
+        ...(where ? where.$params.map((el) => el === undefined ? null : el) : [])
       ]
     }
 
-    await this.emit("update", sql);
-    await this.db.run(sql.statement,
-      ...sql.params);
+    await this.emit('update', sql)
+    await this.db.run(sql.$statement,
+      ...sql.$params)
   }
 
-  public async delete(
+  async delete(
     cond: Record<string, any>
   ) {
-    await this.emit("pre-delete", {cond});
+    await this.emit('pre-delete', { cond })
 
-    const where = parseCond(cond);
+    const where = _parseCond(cond)
 
     const sql: ISql = {
-      statement: `
+      $statement: `
       DELETE FROM "${this.name}"
-      ${where ? `WHERE ${where.clause}` : ""}`,
-      params: (where ? where.params.map((el) => el === undefined ? null : el) : [])
+      ${where ? `WHERE ${where.$statement}` : ''}`,
+      $params: (where ? where.$params.map((el) => el === undefined ? null : el) : [])
     }
 
-    await this.emit("delete", sql);
-    await this.db.run(sql.statement,
-      ...sql.params);
+    await this.emit('delete', sql)
+    await this.db.run(sql.$statement,
+      ...sql.$params)
   }
 
-  public chain(select?: Array<keyof T> | Record<keyof T, string>): Chain<T> {
-    return new Chain(this, select);
+  chain(select?: Array<keyof T> | Record<keyof T, string>): Chain<T> {
+    return new Chain(this, select)
   }
 
-  private loadData(data: any): Partial<T> {
-    for (const [k, v] of Object.entries(data)) {
-      const prop = (this.__meta.prop as any)[k];
+  transformEntry(entry: Partial<T>): Record<string, string | number | null> {
+    const output: Record<string, string | number | null> = {}
+
+    for (const [k, v] of Object.entries<any>(entry)) {
+      const prop = (this.__meta.prop as any)[k]
       if (prop && prop.type) {
-        const tr = (this.__meta.transform as any)[prop.type];
+        const tr = (this.__meta.transform as any)[prop.type]
         if (tr) {
-          data[k] = tr.get(v);
-        }
-      }
-    }
-
-    return data;
-  }
-
-  public transformEntry(entry: Partial<T>): Record<string, string | number | null> {
-    const output: Record<string, string | number | null> = {};
-
-    for (let [k, v] of Object.entries<any>(entry)) {
-      const prop = (this.__meta.prop as any)[k];
-      if (prop && prop.type) {
-        const tr = (this.__meta.transform as any)[prop.type];
-        if (tr) {
-          output[k] = tr.set(v);
+          output[k] = tr.set(v)
         }
       }
 
       if (output[k] === undefined) {
-        output[k] = v;
+        output[k] = v
       }
     }
 
-    return output;
+    return output
+  }
+
+  private _loadData(data: any): Partial<T> {
+    for (const [k, v] of Object.entries(data)) {
+      const prop = (this.__meta.prop as any)[k]
+      if (prop && prop.type) {
+        const tr = (this.__meta.transform as any)[prop.type]
+        if (tr) {
+          data[k] = tr.get(v)
+        }
+      }
+    }
+
+    return data
   }
 }
 
 class Chain<T> {
-  public cols: Record<string, Collection<any>> = {};
-  public firstCol: Collection<T>;
-  
-  public select: Record<string, string> = {};
-  public from: string[] = [];
+  cols: Record<string, Collection<any>> = {};
+  firstCol: Collection<T>;
+
+  select: Record<string, string> = {};
+  from: string[] = [];
 
   constructor(firstCol: Collection<T>, firstSelect?: Array<keyof T> | Record<keyof T, string>) {
-    this.cols[firstCol.name] = firstCol;
-    this.firstCol = firstCol;
+    this.cols[firstCol.name] = firstCol
+    this.firstCol = firstCol
 
     if (firstSelect) {
       if (Array.isArray(firstSelect)) {
         for (const l of firstSelect) {
-          this.select[`"${firstCol.name}"."${l}"`] = `${firstCol.name}__${l}`;
+          this.select[`"${firstCol.name}"."${l}"`] = `${firstCol.name}__${l}`
         }
       } else {
         for (const [l, v] of Object.entries<string>(firstSelect)) {
-          this.select[`"${firstCol.name}"."${l}"`] = v;
+          this.select[`"${firstCol.name}"."${l}"`] = v
         }
       }
     }
 
-    this.from.push(`FROM "${firstCol.name}"`);
+    this.from.push(`FROM "${firstCol.name}"`)
   }
 
   get db() {
-    return this.firstCol.db;
+    return this.firstCol.db
   }
 
-  public join<U>(
+  join<U>(
     to: Collection<U>,
     foreignField: string,
-    localField: keyof T = "_id" as any,
+    localField: keyof T = '_id' as any,
     select?: Array<keyof U> | Record<keyof U, string> | null,
-    type?: "left" | "inner"
+    type?: 'left' | 'inner'
   ): this {
     if (select) {
       if (Array.isArray(select)) {
         for (const l of select) {
-          this.select[`"${to.name}"."${l}"`] = `${to.name}__${l}`;
+          this.select[`"${to.name}"."${l}"`] = `${to.name}__${l}`
         }
       } else {
         for (const [l, v] of Object.entries<string>(select)) {
-          this.select[`"${to.name}"."${l}"`] = v;
+          this.select[`"${to.name}"."${l}"`] = v
         }
       }
     }
 
-    this.from.push(`${type || ""} JOIN "${to.name}" ON "${foreignField}" = "${to.name}".${localField}`);
-    this.cols[to.name] = to;
+    this.from.push(`${type || ''} JOIN "${to.name}" ON "${foreignField}" = "${to.name}".${localField}`)
+    this.cols[to.name] = to
 
-    return this;
+    return this
   }
 
-  public sql(
-    cond?: Record<string, any>, 
+  sql(
+    cond?: Record<string, any>,
     postfix?: string
   ): ISql {
-    const where = cond ? parseCond(cond) : null;
+    const where = cond ? _parseCond(cond) : null
 
     return {
-      statement: `
-      SELECT ${Object.entries(this.select).map(([k, v]) => `${k} AS "${v}"`).join(",")}
-      ${this.from.join("\n")}
-      ${where ? `WHERE ${where.clause}` : ""}
-      ${postfix || ""}`,
-      params: where ? where.params : []
-    };
+      $statement: `
+      SELECT ${Object.entries(this.select).map(([k, v]) => `${k} AS "${v}"`).join(',')}
+      ${this.from.join('\n')}
+      ${where ? `WHERE ${where.$statement}` : ''}
+      ${postfix || ''}`,
+      $params: where ? where.$params : []
+    }
   }
 
-  public async data(
+  async data(
     cond?: Record<string, any>,
     postfix?: string
   ): Promise<Array<Record<string, Record<string, any>>>> {
-    const sql = this.sql(cond, postfix);
+    const sql = this.sql(cond, postfix)
 
-    return (await this.db.all(sql.statement, sql.params)).map((c) => {
-      return this.transformRow(c);
-    });
+    return (await this.db.all(sql.$statement, sql.$params)).map((c) => {
+      return this.transformRow(c)
+    })
   }
 
-  public transformRow(row: any) {
-    const item: Record<string, Record<string, any>> = {};
+  transformRow(row: any) {
+    const item: Record<string, Record<string, any>> = {}
 
     for (const [k, v] of Object.entries<any>(row)) {
-      const [tableName, r] = k.split("__");
+      const [tableName, r] = k.split('__')
 
-      const prop = (this.cols[tableName].__meta.prop as any)[r];
+      const prop = (this.cols[tableName].__meta.prop as any)[r]
       if (prop && prop.type) {
-        const tr = (this.cols[tableName].__meta.transform as any)[prop.type];
+        const tr = (this.cols[tableName].__meta.transform as any)[prop.type]
         if (tr) {
-          item[tableName] = item[tableName] || {};
-          item[tableName][r] = tr.get(v);
+          item[tableName] = item[tableName] || {}
+          item[tableName][r] = tr.get(v)
         }
       }
 
-      item[tableName] = item[tableName] || {};
+      item[tableName] = item[tableName] || {}
       if (item[tableName][r] === undefined) {
-        item[tableName][r] = v;
+        item[tableName][r] = v
       }
     }
-    
-    return item;
+
+    return item
+  }
+}
+
+function _parseCond(q: Record<string, any>): ISql {
+  if (q.$statement) {
+    return {
+      $statement: q.$statement,
+      $params: q.$params || []
+    }
+  }
+
+  const subClause: string[] = []
+  const params: any[] = []
+
+  if (Array.isArray(q.$or)) {
+    const c = q.$or.map((el) => {
+      const r = _parseCond(el)
+      params.push(...r.$params)
+
+      return r.$statement
+    }).join(' OR ')
+
+    subClause.push(`(${c})`)
+  } else if (Array.isArray(q.$and)) {
+    const c = q.$and.map((el) => {
+      const r = _parseCond(el)
+      params.push(...r.$params)
+
+      return r.$statement
+    }).join(' AND ')
+
+    subClause.push(`(${c})`)
+  } else {
+    const r = _parseCondBasic(q)
+
+    subClause.push(`(${r.$statement})`)
+    params.push(...r.$params)
+  }
+
+  return {
+    $statement: subClause.join(' AND ') || 'TRUE',
+    $params: params
+  }
+}
+
+function _parseCondBasic(cond: Record<string, any>): ISql {
+  if (cond.$statement) {
+    return {
+      $statement: cond.$statement,
+      $params: cond.$params || []
+    }
+  }
+
+  const cList: string[] = []
+  const params: any[] = []
+
+  for (let [k, v] of Object.entries(cond)) {
+    if (k.includes('.')) {
+      const kn = k.split('.')
+      k = `json_extract("${kn[0]}", '$.${kn.slice(1).join('.')}')`
+    } else {
+      k = `"${k}"`
+    }
+
+    if (v) {
+      if (Array.isArray(v)) {
+        if (v.length > 1) {
+          cList.push(`${k} IN (${v.map((_: any) => '?').join(',')})`)
+          params.push(...v)
+        } else {
+          cList.push(`${k} = ?`)
+          params.push(v[0])
+        }
+      } else if (v.toString() === '[object Object]') {
+        const op = Object.keys(v)[0]
+        let v1 = v[op]
+        if (Array.isArray(v1)) {
+          switch (op) {
+            case '$in':
+            if (v1.length > 1) {
+              cList.push(`${k} IN (${v1.map((_: any) => '?').join(',')})`)
+              params.push(...v1)
+            } else {
+              cList.push(`${k} = ?`)
+              params.push(v1[0])
+            }
+            break
+          case '$nin':
+            if (v1.length > 1) {
+              cList.push(`${k} NOT IN (${v1.map((_: any) => '?').join(',')})`)
+              params.push(...v1)
+            } else {
+              cList.push(`${k} != ?`)
+              params.push(v1[0])
+            }
+            break
+          }
+          v1 = JSON.stringify(v1)
+        }
+
+        if (v1 && v1.toString() === '[object Object]') {
+          v1 = JSON.stringify(v1)
+        }
+
+        switch (op) {
+          case '$like':
+            cList.push(`${k} LIKE ?`)
+            params.push(JSON.stringify(v1))
+            break
+          case '$nlike':
+            cList.push(`${k} NOT LIKE ?`)
+            params.push(JSON.stringify(v1))
+            break
+          case '$substr':
+            cList.push(`${k} LIKE ?`)
+            params.push(`%${JSON.stringify(v1).replace(/[%_[]/g, '[$&]')}%`)
+            break
+          case '$nsubstr':
+            cList.push(`${k} NOT LIKE ?`)
+            params.push(`%${JSON.stringify(v1).replace(/[%_[]/g, '[$&]')}%`)
+            break
+          case '$exists':
+            cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'}`)
+            break
+          case '$gt':
+            cList.push(`${k} > ?`)
+            params.push(v1)
+            break
+          case '$gte':
+            cList.push(`${k} >= ?`)
+            params.push(v1)
+            break
+          case '$lt':
+            cList.push(`${k} < ?`)
+            params.push(v1)
+            break
+          case '$lte':
+            cList.push(`${k} <= ?`)
+            params.push(v1)
+            break
+          case '$ne':
+            cList.push(`${k} != ?`)
+            params.push(v)
+            break
+          default:
+            cList.push(`${k} = ?`)
+            params.push(v)
+        }
+      }
+    } else {
+      cList.push(`${k} = ?`)
+      params.push(v)
+    }
+  }
+
+  return {
+    $statement: cList.join(' AND ') || 'TRUE',
+    $params: params
   }
 }

@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "commonjs",
-    "outDir": "./build",
+    "outDir": "./lib",
     "strict": true,
     "esModuleInterop": true,
     "emitDecoratorMetadata": true,
@@ -16,18 +16,13 @@
     "downlevelIteration": true,
     "declaration": true,
     "declarationMap": true,
-    "lib": ["es2015", "es7", "es6", "dom", "es2017"],
-    "baseUrl": ".",
+    "lib": ["esnext"],
     "types": [
       "node"
-    ],
-    "rootDir": "src"
+    ]
   },
-  "include": [
-    "src/**/*"
-  ],
   "exclude": [
     "node_modules",
-    "dist"
+    "lib"
   ]
 }

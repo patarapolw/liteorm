@@ -1,7 +1,7 @@
-import { Db } from "./db";
+import { Db } from './db'
 
-export * from "./collection";
-export * from "./decorators";
-export * from "./db";
+export * from './collection'
+export * from './decorators'
+export * from './db'
 
-export default Db;
+export default Db

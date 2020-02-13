@@ -1,12 +1,12 @@
 {
   "name": "liteorm",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
-    "prepublishOnly": "npm run build",
-    "build": "tsc"
+    "prepack": "yarn build",
+    "build": "tsc -P tsconfig.json"
   },
   "keywords": [
     "sqlite",
@@ -19,18 +19,25 @@
     "url": "git+https://github.com/patarapolw/liteorm.git"
   },
   "dependencies": {
-    "@types/bluebird-global": "^3.5.12",
-    "@types/uuid": "^3.4.6",
     "bluebird": "^3.5.5",
     "bluebird-global": "^1.0.1",
     "emittery": "^0.4.1",
-    "moment": "^2.24.0",
+    "nanoid": "^2.1.11",
     "reflect-metadata": "^0.1.13",
-    "sqlite": "^3.0.3",
-    "uuid": "^3.3.3"
+    "sqlite": "^3.0.3"
   },
   "devDependencies": {
+    "@types/bluebird-global": "^3.5.12",
+    "@types/nanoid": "^2.1.0",
     "@types/node": "^12.7.5",
+    "@typescript-eslint/eslint-plugin": "^2.19.2",
+    "@typescript-eslint/parser": "^2.19.2",
+    "eslint": ">=6.2.2",
+    "eslint-config-standard": "^14.1.0",
+    "eslint-plugin-import": ">=2.18.0",
+    "eslint-plugin-node": ">=9.1.0",
+    "eslint-plugin-promise": ">=4.2.1",
+    "eslint-plugin-standard": ">=4.0.0",
     "typescript": "^3.6.2"
   }
 }
