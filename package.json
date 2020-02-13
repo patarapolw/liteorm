@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -27,6 +27,7 @@
     "bluebird": "^3.5.5",
     "bluebird-global": "^1.0.1",
     "emittery": "^0.4.1",
+    "nanoid": "^2.1.11",
     "reflect-metadata": "^0.1.13",
     "sqlite": "^3.0.3"
   },
@@ -46,7 +47,6 @@
     "eslint-plugin-standard": ">=4.0.0",
     "faker": "^4.1.0",
     "mocha": "^6.x",
-    "nanoid": "^2.1.11",
     "ts-mocha": "^6.0.0",
     "typescript": "^3.6.2"
   }

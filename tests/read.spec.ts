@@ -13,7 +13,7 @@ before(async () => {
 describe('readDatabase', () => {
   ;[
     {
-      front: { $substr: 'aut' },
+      front: { $substr: 'Lorem' },
     },
     {
       'stat.streak.right': { $gt: 8 },
@@ -23,7 +23,8 @@ describe('readDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      console.dir(await db.cols.card.find(cond, ['COUNT(*) AS count']), { depth: null })
+      console.dir(await db.cols.card.find(cond, { 'COUNT(*)': 'count' }), { depth: null })
+      // console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview'], 'LIMIT 5'), { depth: null })
     })
   })
 

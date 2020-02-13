@@ -22,7 +22,7 @@ module.exports = {
   rules: {
     'no-cond-assign': 0,
     'no-new': 0,
-    'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'arrow-parens': ['error', 'always'],
     'quote-props': ['error', 'as-needed'],
     'comma-dangle': ['error', 'always-multiline'],
