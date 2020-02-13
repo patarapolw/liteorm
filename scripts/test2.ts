@@ -16,8 +16,8 @@ function prop (): PropertyDecorator {
 
 @Table()
 class Point {
-  @prop() x: number = 1;
-  @prop() y?: number;
+  @prop() x: number = 1
+  @prop() y?: number
 }
 
 new Point()

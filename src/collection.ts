@@ -1,9 +1,7 @@
-// eslint-disable-next-line no-unused-vars
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
 import nanoid from 'nanoid'
 
-// eslint-disable-next-line no-unused-vars
 import { ISqliteMeta, IPropRow } from './decorators'
 
 export type SqliteNative = 'string' | 'integer' | 'float' | 'binary'
@@ -19,42 +17,51 @@ export interface ISql {
   $params: Record<string, any>
 }
 
+export type IEntry<T> = T & {
+  createdAt?: Date
+  updatedAt?: Date
+}
+
 export class Collection<T> extends Emittery.Typed<{
   'build': ISql
   'pre-create': {
-    entry: T & {
-      createdAt?: Date
-      updatedAt?: Date
+    entry: IEntry<T>
+    options: {
+      postfix: string
     }
-    ignoreErrors: boolean
   }
   'create': ISql
   'pre-find': {
-    cond: string | Record<string, any>
-    fields?: string[] | Record<string, string> | null
-    postfix?: string
+    cond: Record<string, any>
+    /**
+     * Fields are mostly `keyof IEntry<T>`, but can also be functions, like `COUNT(_id)`
+     */
+    fields: Record<string, string>
+    options: {
+      postfix: string
+    }
   }
   'find': ISql
   'pre-update': {
-    cond: string | Record<string, any>
-    set: Partial<T & {
-      createdAt?: Date
-      updatedAt?: Date
-    }>
+    cond: Record<string, any>
+    set: Partial<IEntry<T>>
+    options: {
+      postfix: string
+    }
   }
   'update': ISql
   'pre-delete': {
-    cond: string | Record<string, any>
+    cond: Record<string, any>
+    options: {
+      postfix: string
+    }
   }
   'delete': ISql
 }> {
   __meta: {
     fields: Array<keyof T | '_id'>
     transform: Record<SqliteExt, ITransformer<any>>
-  } & ISqliteMeta<T & {
-    createdAt?: Date
-    updatedAt?: Date
-  }>
+  } & ISqliteMeta<IEntry<T>>
 
   db: sqlite.Database
   name: string
@@ -114,6 +121,11 @@ export class Collection<T> extends Emittery.Typed<{
     }
   }
 
+  /**
+   * Normally, you don't have to call this method. It is automatically built on `await db.collection()`
+   *
+   * Has no effect if call repeatedly.
+   */
   async build () {
     const typeMap: Record<SqliteNative | SqliteExt, string> = {
       string: 'TEXT',
@@ -202,8 +214,26 @@ export class Collection<T> extends Emittery.Typed<{
     return this
   }
 
-  async create (entry: T, ignoreErrors = false): Promise<number> {
-    await this.emit('pre-create', { entry, ignoreErrors })
+  /**
+   * The standard INSERT command
+   *
+   * @param entry The entry to insert
+   * @param options
+   */
+  async create (
+    entry: T,
+    options: {
+      postfix?: string
+      ignoreErrors?: boolean
+    } = {},
+  ): Promise<number> {
+    if (options.ignoreErrors) {
+      options.postfix = options.postfix || 'ON CONFLICT DO NOTHING'
+    }
+
+    const postfix = options.postfix || ''
+
+    await this.emit('pre-create', { entry, options: { postfix } })
 
     const bracketed: string[] = []
     const values: Record<string, any> = {}
@@ -226,7 +256,7 @@ export class Collection<T> extends Emittery.Typed<{
         `INSERT INTO ${safeColumnName(this.name)}`,
         `(${bracketed.map(safeColumnName).join(',')})`,
         `VALUES (${Object.keys(values).join(',')})`,
-        ignoreErrors ? 'ON CONFLICT DO NOTHING' : '',
+        postfix,
       ].join(' '),
       $params: values,
     }
@@ -240,38 +270,50 @@ export class Collection<T> extends Emittery.Typed<{
   /**
    *
    * @param cond Put in `{ $statement: string, $params: any[] }` to directly use SQL
-   * @param fields Put in empty array or `null` to select all fields
-   * @param postfix Put in stuff like `ORDER BY` or `LIMIT` to enhance queries
+   * @param fields Put in empty array or `null` to select all fields. `COUNT(_id)` is also allowed.
+   * @param options
    */
   async find (
     cond: Record<string, any>,
     fields?: string[] | Record<string, string> | null,
-    postfix?: string,
+    options: {
+      postfix?: string
+      sort?: {
+        key: keyof IEntry<T>
+        desc?: boolean
+      }
+      offset?: number
+      limit?: number
+    } = {},
   ): Promise<Partial<T>[]> {
-    await this.emit('pre-find', { cond, fields, postfix })
+    if (!fields) {
+      fields = {}
+    }
+    if (Array.isArray(fields)) {
+      fields = fields.map((c) => c.split('.')[0]).reduce((prev, c) => ({ ...prev, [c]: c }), {})
+    }
+
+    let postfix = options.postfix || ''
+    if (options.sort) {
+      postfix += `ORDER BY ${safeColumnName(options.sort.key as string)} ${options.sort.desc ? 'DESC' : 'ASC'} `
+    }
+    if (options.limit) {
+      postfix += `LIMIT ${options.limit} `
+    }
+    if (options.offset) {
+      postfix += `OFFSET ${options.offset} `
+    }
+
+    await this.emit('pre-find', { cond, fields, options: { postfix } })
 
     const where = _parseCond(cond)
 
     const selectClause: string[] = []
 
-    if (fields) {
-      if (Array.isArray(fields)) {
-        if (fields.length > 0) {
-          fields.map((f) => {
-            selectClause.push(safeColumnName(f.split('.')[0]))
-          })
-        } else {
-          selectClause.push('*')
-        }
-      } else {
-        if (Object.keys(fields).length > 0) {
-          Object.entries(fields).map(([k, v]) => {
-            selectClause.push(`${safeColumnName(k)} AS ${safeColumnName(v)}`)
-          })
-        } else {
-          selectClause.push('*')
-        }
-      }
+    if (Object.keys(fields).length > 0) {
+      Object.entries(fields).map(([k, v]) => {
+        selectClause.push(`${safeColumnName(k)} AS ${safeColumnName(v)}`)
+      })
     } else {
       selectClause.push('*')
     }
@@ -281,7 +323,7 @@ export class Collection<T> extends Emittery.Typed<{
         `SELECT ${selectClause.join(',')}`,
         `FROM ${this.name}`,
         where ? `WHERE ${where.$statement}` : '',
-        postfix || '',
+        postfix,
       ].join(' '),
       $params: where ? where.$params : {},
     }
@@ -292,18 +334,39 @@ export class Collection<T> extends Emittery.Typed<{
     return r
   }
 
+  /**
+   * Similar to `find`, but always limit to 1 item
+   *
+   * @param cond
+   * @param fields
+   */
   async get (
     cond: Record<string, any>,
     fields?: string[] | Record<string, string>,
   ): Promise<Partial<T> | null> {
-    return (await this.find(cond, fields, 'LIMIT 1'))[0] || null
+    return (await this.find(cond, fields, { limit: 1 }))[0] || null
   }
 
+  /**
+   *
+   * @param cond
+   * @param set
+   * @param options
+   */
   async update (
     cond: Record<string, any>,
-    set: Partial<T>,
+    set: Partial<IEntry<T>>,
+    options: {
+      postfix?: string
+      // limit?: number
+    } = {},
   ) {
-    await this.emit('pre-update', { cond, set })
+    const postfix = options.postfix || ''
+    // if (options.limit) {
+    //   postfix += `LIMIT ${options.limit} `
+    // }
+
+    await this.emit('pre-update', { cond, set, options: { postfix } })
 
     const setK: string[] = []
     const setV: Record<string, any> = {}
@@ -330,6 +393,7 @@ export class Collection<T> extends Emittery.Typed<{
         `UPDATE ${safeColumnName(this.name)}`,
         `SET ${setK.map(safeColumnName).join(',')}`,
         `${where ? `WHERE ${where.$statement}` : ''}`,
+        postfix,
       ].join(' '),
       $params: {
         ...setV,
@@ -341,10 +405,24 @@ export class Collection<T> extends Emittery.Typed<{
     await this.db.run(sql.$statement, sql.$params)
   }
 
+  /**
+   *
+   * @param cond
+   * @param options
+   */
   async delete (
     cond: Record<string, any>,
+    options: {
+      postfix?: string
+      // limit?: number
+    } = {},
   ) {
-    await this.emit('pre-delete', { cond })
+    const postfix = options.postfix || ''
+    // if (options.limit) {
+    //   postfix += `LIMIT ${options.limit} `
+    // }
+
+    await this.emit('pre-delete', { cond, options: { postfix } })
 
     const where = _parseCond(cond)
 
@@ -352,6 +430,7 @@ export class Collection<T> extends Emittery.Typed<{
       $statement: [
         `DELETE FROM ${safeColumnName(this.name)}`,
         `${where ? `WHERE ${where.$statement}` : ''}`,
+        postfix,
       ].join(' '),
       $params: (where ? where.$params : {}),
     }
@@ -360,12 +439,26 @@ export class Collection<T> extends Emittery.Typed<{
     await this.db.run(sql.$statement, sql.$params)
   }
 
+  /**
+   * Do joining
+   *
+   * ```ts
+   * col1.chain().join(col2, 'colId')
+   * ```
+   *
+   * @param select Limit fields before joining
+   */
   chain (select?: Array<keyof T> | Record<keyof T, string>): Chain<T> {
     return new Chain(this, select)
   }
 
-  transformEntry (entry: Partial<T>): Record<string, string | number | null> {
-    const output: Record<string, string | number | null> = {}
+  /**
+   * Normally, you wouldn't need to call this direcly, but it works by converting custom entry to native
+   *
+   * @param entry
+   */
+  transformEntry (entry: Partial<T>): Record<string, string | number | boolean | null> {
+    const output: Record<string, string | number | boolean | null> = {}
 
     for (const [k, v] of Object.entries<any>(entry)) {
       const prop = (this.__meta.prop as any)[k]
@@ -399,7 +492,16 @@ export class Collection<T> extends Emittery.Typed<{
   }
 }
 
-class Chain<T> {
+class Chain<T> extends Emittery.Typed<{
+  join: Chain<T>
+  'pre-data': {
+    cond: Record<string, any>
+    options: {
+      postfix: string
+    }
+  }
+  data: ISql
+}> {
   cols: Record<string, Collection<any>> = {}
   firstCol: Collection<T>
 
@@ -407,6 +509,8 @@ class Chain<T> {
   from: string[] = []
 
   constructor (firstCol: Collection<T>, firstSelect?: Array<keyof T> | Record<keyof T, string>) {
+    super()
+
     this.cols[firstCol.name] = firstCol
     this.firstCol = firstCol
 
@@ -429,10 +533,18 @@ class Chain<T> {
     return this.firstCol.db
   }
 
+  /**
+   *
+   * @param to
+   * @param foreignField
+   * @param localField
+   * @param select
+   * @param type
+   */
   join<U> (
     to: Collection<U>,
-    foreignField: string,
-    localField: keyof T = '_id' as any,
+    foreignField: string | [string, string],
+    localField: keyof IEntry<U> = '_id' as any,
     select?: Array<keyof U> | Record<keyof U, string> | null,
     type?: 'left' | 'inner',
   ): this {
@@ -448,36 +560,58 @@ class Chain<T> {
       }
     }
 
+    if (Array.isArray(foreignField)) {
+      foreignField = foreignField.join('__')
+    }
+
     this.from.push(
       `${type || ''} JOIN ${safeColumnName(to.name)}`,
       `ON ${safeColumnName(foreignField)} = ${safeColumnName(to.name)}.${localField}`)
     this.cols[to.name] = to
 
+    this.emit('join', this)
+
     return this
   }
 
-  sql (
-    cond?: Record<string, any>,
-    postfix?: string,
-  ): ISql {
-    const where = cond ? _parseCond(cond) : null
+  async data (
+    cond: Record<string, any> = {},
+    options: {
+      postfix?: string
+      sort?: {
+        key: string
+        desc?: boolean
+      }
+      offset?: number
+      limit?: number
+    } = {},
+  ): Promise<Array<Record<string, Record<string, any>>>> {
+    let postfix = options.postfix || ''
+    if (options.sort) {
+      postfix += `ORDER BY ${safeColumnName(options.sort.key)} ${options.sort.desc ? 'DESC' : 'ASC'} `
+    }
+    if (options.limit) {
+      postfix += `LIMIT ${options.limit} `
+    }
+    if (options.offset) {
+      postfix += `OFFSET ${options.offset} `
+    }
 
-    return {
+    await this.emit('pre-data', { cond, options: { postfix } })
+
+    const where = _parseCond(cond)
+
+    const sql = {
       $statement: [
         `SELECT ${Object.entries(this.select).map(([k, v]) => `${safeColumnName(k)} AS ${safeColumnName(v)}`).join(',')}`,
         this.from.join('\n'),
         where ? `WHERE ${where.$statement}` : '',
-        postfix || '',
+        postfix,
       ].join(' '),
       $params: where ? where.$params : {},
     }
-  }
 
-  async data (
-    cond?: Record<string, any>,
-    postfix?: string,
-  ): Promise<Array<Record<string, Record<string, any>>>> {
-    const sql = this.sql(cond, postfix)
+    await this.emit('data', sql)
 
     return (await this.db.all(sql.$statement, sql.$params)).map((c) => {
       return this.transformRow(c)
