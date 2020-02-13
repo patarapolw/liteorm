@@ -6,7 +6,8 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "prepack": "yarn build",
-    "build": "tsc -P src/tsconfig.json"
+    "build": "tsc -P src/tsconfig.json",
+    "test": "ts-mocha tests/**/*.spec.ts"
   },
   "keywords": [
     "sqlite",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/bluebird-global": "^3.5.12",
     "@types/faker": "^4.1.9",
+    "@types/mocha": "^5.2.7",
     "@types/nanoid": "^2.1.0",
     "@types/node": "^12.7.5",
     "@typescript-eslint/eslint-plugin": "^2.19.2",
@@ -43,7 +45,9 @@
     "eslint-plugin-promise": ">=4.2.1",
     "eslint-plugin-standard": ">=4.0.0",
     "faker": "^4.1.0",
+    "mocha": "^6.x",
     "nanoid": "^2.1.11",
+    "ts-mocha": "^6.0.0",
     "typescript": "^3.6.2"
   }
 }

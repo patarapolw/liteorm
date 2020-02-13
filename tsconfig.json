@@ -18,7 +18,8 @@
     "declarationMap": true,
     "lib": ["esnext"],
     "types": [
-      "node"
+      "node",
+      "mocha"
     ]
   },
   "exclude": [

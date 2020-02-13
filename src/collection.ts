@@ -140,7 +140,7 @@ export class Collection<T> extends Emittery.Typed<{
         let def = ''
         if (v.default) {
           if (typeof v.default === 'string') {
-            def = `DEFAULT '${def.replace("'", "[']")}'`
+            def = `DEFAULT '${def.replace(/'/g, "[']")}'`
           } else if (typeof v.default === 'number') {
             def = `DEFAULT ${def}`
           } else if (typeof v.default === 'boolean') {
@@ -245,11 +245,7 @@ export class Collection<T> extends Emittery.Typed<{
       selectClause.push('*')
     } else {
       fields.forEach((f) => {
-        const fn = f.split('.')
-
-        if (this.__meta.fields.includes(fn[0] as any)) {
-          selectClause.push(f)
-        }
+        selectClause.push(f.split('.')[0])
       })
     }
 
@@ -536,9 +532,12 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
   for (let [k, v] of Object.entries(cond)) {
     if (k.includes('.')) {
       const kn = k.split('.')
-      k = `json_extract("${kn[0]}", '$.${kn.slice(1).join('.')}')`
-    } else {
-      k = `"${k}"`
+      k = `json_extract(${kn[0]}, '$.${kn.slice(1).join('.')}')`
+    }
+
+    if (v instanceof Date) {
+      k = `json_extract(${k}, '$.$milli')`
+      v = +v
     }
 
     if (v) {
@@ -550,7 +549,7 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
           cList.push(`${k} = ?`)
           params.push(v[0])
         }
-      } else if (v.toString() === '[object Object]') {
+      } else if (typeof v === 'object' && v.toString() === '[object Object]') {
         const op = Object.keys(v)[0]
         let v1 = v[op]
         if (Array.isArray(v1)) {
@@ -577,26 +576,31 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
           v1 = JSON.stringify(v1)
         }
 
-        if (v1 && v1.toString() === '[object Object]') {
-          v1 = JSON.stringify(v1)
+        if (v1 && typeof v1 === 'object') {
+          if (v1 instanceof Date) {
+            k = `json_extract(${k}, '$.$milli')`
+            v1 = +v1
+          } else {
+            v1 = JSON.stringify(v1)
+          }
         }
 
         switch (op) {
           case '$like':
             cList.push(`${k} LIKE ?`)
-            params.push(JSON.stringify(v1))
+            params.push(v1)
             break
           case '$nlike':
             cList.push(`${k} NOT LIKE ?`)
-            params.push(JSON.stringify(v1))
+            params.push(v1)
             break
           case '$substr':
             cList.push(`${k} LIKE ?`)
-            params.push(`%${JSON.stringify(v1).replace(/[%_[]/g, '[$&]')}%`)
+            params.push(`%${v1.replace(/[%_[]/g, '[$&]')}%`)
             break
           case '$nsubstr':
             cList.push(`${k} NOT LIKE ?`)
-            params.push(`%${JSON.stringify(v1).replace(/[%_[]/g, '[$&]')}%`)
+            params.push(`%${v1.replace(/[%_[]/g, '[$&]')}%`)
             break
           case '$exists':
             cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'}`)
@@ -625,6 +629,9 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
             cList.push(`${k} = ?`)
             params.push(v)
         }
+      } else {
+        cList.push(`${k} = ?`)
+        params.push(v)
       }
     } else {
       cList.push(`${k} = ?`)
