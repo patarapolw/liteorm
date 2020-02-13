@@ -6,7 +6,7 @@ Also, support multiple SQLite databases, with cloned schemas or different schema
 
 ## Usage
 
-For example, please see [/tests](https://github.com/patarapolw/liteorm/tree/master/tests)
+For example, please see [/tests/suites](https://github.com/patarapolw/liteorm/tree/master/tests/suites)
 
 ## Querying data
 
