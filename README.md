@@ -10,7 +10,7 @@ For example, please see [/tests](https://github.com/patarapolw/liteorm/tree/mast
 
 ## Querying data
 
-To query, you have to supply both condition `{"a.b": "c"}` and field selector `["a.b AS ab"]`. If no field is supplied, all fields will be selected.
+To query, you have to supply condition `{ 'a.b': 'c' }`, and optional field selector `['a']` or `{ 'a': 'b' }` (`a AS b`). If no field is supplied, all fields will be selected.
 
 ## JSON support
 
@@ -31,7 +31,7 @@ npm i liteorm
 - Type `Number` by default is associated with `INTEGER`. To change it to `FLOAT`, use
 
 ```typescript
-@prop({type: "float"}) f!: number;
+@prop({type: 'float'}) f!: number;
 ```
 
 - `BLOB` is associated with Type `ArrayBuffer`.
