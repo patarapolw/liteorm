@@ -30,7 +30,7 @@ export function prop (params: {
   unique?: boolean,
   null?: boolean
   references?: string
-  default?: string
+  default?: any
 } = {}): PropertyDecorator {
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)

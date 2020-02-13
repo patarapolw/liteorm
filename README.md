@@ -7,7 +7,7 @@ Also, support multiple SQLite databases, with cloned schemas or different schema
 ## Usage
 
 ```typescript
-import Db, { Table, primary, prop } from "liteorm";
+import { Db, Table, primary, prop } from "liteorm";
 import crypto from "crypto";
 
 @Table({name: "deck"})

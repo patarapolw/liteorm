@@ -2,15 +2,19 @@
   "name": "liteorm",
   "version": "0.4.0",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
-  "main": "build/index.js",
-  "types": "build/index.d.ts",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "scripts": {
     "prepack": "yarn build",
-    "build": "tsc -P tsconfig.json"
+    "build": "tsc -P src/tsconfig.json"
   },
   "keywords": [
     "sqlite",
     "orm"
+  ],
+  "files": [
+    "lib",
+    "src"
   ],
   "author": "Pacharapol Withayasakpunt",
   "license": "MIT",
@@ -22,12 +26,12 @@
     "bluebird": "^3.5.5",
     "bluebird-global": "^1.0.1",
     "emittery": "^0.4.1",
-    "nanoid": "^2.1.11",
     "reflect-metadata": "^0.1.13",
     "sqlite": "^3.0.3"
   },
   "devDependencies": {
     "@types/bluebird-global": "^3.5.12",
+    "@types/faker": "^4.1.9",
     "@types/nanoid": "^2.1.0",
     "@types/node": "^12.7.5",
     "@typescript-eslint/eslint-plugin": "^2.19.2",
@@ -38,6 +42,8 @@
     "eslint-plugin-node": ">=9.1.0",
     "eslint-plugin-promise": ">=4.2.1",
     "eslint-plugin-standard": ">=4.0.0",
+    "faker": "^4.1.0",
+    "nanoid": "^2.1.11",
     "typescript": "^3.6.2"
   }
 }
