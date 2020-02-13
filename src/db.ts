@@ -1,5 +1,6 @@
 import 'bluebird-global'
 import sqlite from 'sqlite'
+
 import { Collection } from './collection'
 
 export class Db {
@@ -8,8 +9,8 @@ export class Db {
     return new Db({ sql })
   }
 
-  public sql: sqlite.Database;
-  public cols: Record<string, Collection<any>> = {};
+  public sql: sqlite.Database
+  public cols: Record<string, Collection<any>> = {}
 
   private constructor (params: any) {
     this.sql = params.sql

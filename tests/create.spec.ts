@@ -1,3 +1,5 @@
+import crypto from 'crypto'
+
 import faker from 'faker'
 import nanoid from 'nanoid'
 
@@ -44,8 +46,8 @@ class DbNote {
   await Promise.all(Array.from({ length: 1000 }).map(async () => {
     try {
       await mediaModel.create({
-        name: faker.name.findName(),
-        data: dataURItoBuffer(faker.image.dataUri()),
+        name: faker.system.fileName(undefined, 'image'),
+        data: crypto.randomBytes(256),
       })
     } catch (e) {
       console.error(e)
@@ -96,9 +98,3 @@ class DbNote {
 
   await db.close()
 })().catch(console.error)
-
-function dataURItoBuffer (s: string) {
-  const matches = s.match(/^data:.+\/(.+);base64,(.*)$/)!
-  const data = matches[2]
-  return Buffer.from(data, 'base64')
-}

@@ -147,7 +147,7 @@ export class Collection<T> extends Emittery.Typed<{
             def = `DEFAULT ${v.default.toString().toLocaleUpperCase()}`
           } else if (typeof v.default === 'function') {
             this.on('pre-create', ({ entry }) => {
-              (entry as any)[k] = v.default!()
+              (entry as any)[k] = (entry as any)[k] || v.default!()
             })
           } else if ((this.__meta.transform as any)[v.type]) {
             def = `DEFAULT ${(this.__meta.transform as any)[v.type](v.default)}`
