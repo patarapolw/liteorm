@@ -6,6 +6,7 @@ export function primary<T> (params: {
   name?: string
   type?: SqliteNative
   autoincrement?: boolean
+  default?: any
 } = {}): PropertyDecorator {
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)
@@ -18,6 +19,7 @@ export function primary<T> (params: {
       name,
       type: (type || typeMap[t.name] || 'integer') as SqliteNative,
       autoincrement: autoincrement !== undefined ? autoincrement : false,
+      default: !autoincrement && params && params.default,
     }
 
     Reflect.defineMetadata('sqlite:primary', primary, target)
@@ -105,6 +107,7 @@ export interface IPrimaryRow<T> {
   name: (keyof T | '_id') | (keyof T)[]
   type?: SqliteNative
   autoincrement?: boolean
+  default?: any
 }
 
 export interface IPropRow {

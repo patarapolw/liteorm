@@ -124,6 +124,27 @@ export class Collection<T> extends Emittery.Typed<{
       strArray: 'TEXT',
     }
 
+    const getDefault = (k: string, v: {
+      default?: any
+      type?: string
+    }) => {
+      if (typeof v.default === 'string') {
+        return `DEFAULT '${v.default.replace(/'/g, "[']")}'`
+      } else if (typeof v.default === 'number') {
+        return `DEFAULT ${v.default}`
+      } else if (typeof v.default === 'boolean') {
+        return `DEFAULT ${v.default.toString().toLocaleUpperCase()}`
+      } else if (typeof v.default === 'function') {
+        this.on('pre-create', ({ entry }) => {
+          (entry as any)[k] = (entry as any)[k] || v.default!()
+        })
+      } else if (v.type && (this.__meta.transform as any)[v.type]) {
+        return `DEFAULT ${(this.__meta.transform as any)[v.type](v.default)}`
+      }
+
+      return ''
+    }
+
     const col: string[] = []
 
     if (this.__meta.primary.type) {
@@ -132,34 +153,18 @@ export class Collection<T> extends Emittery.Typed<{
         typeMap[this.__meta.primary.type] || 'INTEGER',
         'PRIMARY KEY',
         this.__meta.primary.autoincrement ? 'AUTOINCREMENT' : '',
+        getDefault(this.__meta.primary.name as string, this.__meta.primary),
       ].join(' '))
     }
 
     for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
       if (v && v.type) {
-        let def = ''
-        if (v.default) {
-          if (typeof v.default === 'string') {
-            def = `DEFAULT '${def.replace(/'/g, "[']")}'`
-          } else if (typeof v.default === 'number') {
-            def = `DEFAULT ${def}`
-          } else if (typeof v.default === 'boolean') {
-            def = `DEFAULT ${v.default.toString().toLocaleUpperCase()}`
-          } else if (typeof v.default === 'function') {
-            this.on('pre-create', ({ entry }) => {
-              (entry as any)[k] = (entry as any)[k] || v.default!()
-            })
-          } else if ((this.__meta.transform as any)[v.type]) {
-            def = `DEFAULT ${(this.__meta.transform as any)[v.type](v.default)}`
-          }
-        }
-
         col.push([
           `"${k}"`,
           typeMap[v.type] || 'INTEGER',
           v.unique ? 'UNIQUE' : '',
           v.null ? '' : 'NOT NULL',
-          def,
+          getDefault(k, v),
           v.references ? `REFERENCES "${v.references}"` : '',
         ].join(' '))
       }
