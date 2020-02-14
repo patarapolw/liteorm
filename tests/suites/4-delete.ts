@@ -1,6 +1,6 @@
 import { db } from './0-create'
 
-export default () => describe('deleteDatabse', () => {
+export default () => describe('deleteDatabase', () => {
   ;[
     { front: { $substr: 'Lorem' } },
     {

@@ -27,7 +27,7 @@ export class Collection<T> extends Emittery.Typed<{
   'pre-create': {
     entry: IEntry<T>
     options: {
-      postfix: string
+      postfix: string[]
     }
   }
   'create': ISql
@@ -38,7 +38,7 @@ export class Collection<T> extends Emittery.Typed<{
      */
     fields: Record<string, string>
     options: {
-      postfix: string
+      postfix: string[]
     }
   }
   'find': ISql
@@ -46,14 +46,14 @@ export class Collection<T> extends Emittery.Typed<{
     cond: Record<string, any>
     set: Partial<IEntry<T>>
     options: {
-      postfix: string
+      postfix: string[]
     }
   }
   'update': ISql
   'pre-delete': {
     cond: Record<string, any>
     options: {
-      postfix: string
+      postfix: string[]
     }
   }
   'delete': ISql
@@ -232,11 +232,11 @@ export class Collection<T> extends Emittery.Typed<{
       ignoreErrors?: boolean
     } = {},
   ): Promise<number> {
-    if (options.ignoreErrors) {
-      options.postfix = options.postfix || 'ON CONFLICT DO NOTHING'
-    }
+    const postfix = options.postfix ? [options.postfix] : []
 
-    const postfix = options.postfix || ''
+    if (options.ignoreErrors) {
+      postfix.push('ON CONFLICT DO NOTHING')
+    }
 
     await this.emit('pre-create', { entry, options: { postfix } })
 
@@ -261,7 +261,7 @@ export class Collection<T> extends Emittery.Typed<{
         `INSERT INTO ${safeColumnName(this.name)}`,
         `(${bracketed.map(safeColumnName).join(',')})`,
         `VALUES (${Object.keys(values).join(',')})`,
-        postfix,
+        ...postfix,
       ].join(' '),
       $params: values,
     }
@@ -298,15 +298,15 @@ export class Collection<T> extends Emittery.Typed<{
       fields = fields.map((c) => c.split('.')[0]).reduce((prev, c) => ({ ...prev, [c]: c }), {})
     }
 
-    let postfix = options.postfix || ''
+    const postfix = options.postfix ? [options.postfix] : []
     if (options.sort) {
-      postfix += ` ORDER BY ${safeColumnName(options.sort.key as string)} ${options.sort.desc ? 'DESC' : 'ASC'}`
+      postfix.push(`ORDER BY ${safeColumnName(options.sort.key as string)} ${options.sort.desc ? 'DESC' : 'ASC'}`)
     }
     if (options.limit) {
-      postfix += ` LIMIT ${options.limit}`
+      postfix.push(`LIMIT ${options.limit}`)
     }
     if (options.offset) {
-      postfix += ` OFFSET ${options.offset}`
+      postfix.push(`OFFSET ${options.offset}`)
     }
 
     await this.emit('pre-find', { cond, fields, options: { postfix } })
@@ -328,7 +328,7 @@ export class Collection<T> extends Emittery.Typed<{
         `SELECT ${selectClause.join(',')}`,
         `FROM ${this.name}`,
         where ? `WHERE ${where.$statement}` : '',
-        postfix,
+        ...postfix,
       ].join(' '),
       $params: where ? where.$params : {},
     }
@@ -366,7 +366,7 @@ export class Collection<T> extends Emittery.Typed<{
       // limit?: number
     } = {},
   ) {
-    const postfix = options.postfix || ''
+    const postfix = options.postfix ? [options.postfix] : []
     // if (options.limit) {
     //   postfix += ` LIMIT ${options.limit}`
     // }
@@ -398,7 +398,7 @@ export class Collection<T> extends Emittery.Typed<{
         `UPDATE ${safeColumnName(this.name)}`,
         `SET ${setK.map(safeColumnName).join(',')}`,
         `${where ? `WHERE ${where.$statement}` : ''}`,
-        postfix,
+        ...postfix,
       ].join(' '),
       $params: {
         ...setV,
@@ -422,7 +422,7 @@ export class Collection<T> extends Emittery.Typed<{
       // limit?: number
     } = {},
   ) {
-    const postfix = options.postfix || ''
+    const postfix = options.postfix ? [options.postfix] : []
     // if (options.limit) {
     //   postfix += ` LIMIT ${options.limit}`
     // }
@@ -435,7 +435,7 @@ export class Collection<T> extends Emittery.Typed<{
       $statement: [
         `DELETE FROM ${safeColumnName(this.name)}`,
         `${where ? `WHERE ${where.$statement}` : ''}`,
-        postfix,
+        ...postfix,
       ].join(' '),
       $params: (where ? where.$params : {}),
     }
