@@ -151,7 +151,7 @@ export class Collection<T> extends Emittery.Typed<{
       } else if (typeof v.default === 'number') {
         return `DEFAULT ${v.default}`
       } else if (typeof v.default === 'boolean') {
-        return `DEFAULT ${v.default.toString().toLocaleUpperCase()}`
+        return `DEFAULT ${v.default ? 1 : 0}`
       } else if (typeof v.default === 'function') {
         this.on('pre-create', ({ entry }) => {
           (entry as any)[k] = (entry as any)[k] || v.default!(entry)
@@ -215,6 +215,18 @@ export class Collection<T> extends Emittery.Typed<{
 
     await this.emit('build', sql)
     await this.db.exec(sql.$statement)
+
+    for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
+      if (v && v.index) {
+        await this.db.exec([
+          'CREATE INDEX IF NOT EXISTS',
+          `${k}__idx`,
+          'ON',
+          `${safeColumnName(this.name)}`,
+          `(${safeColumnName(k)})`,
+        ].join(' '))
+      }
+    }
 
     return this
   }

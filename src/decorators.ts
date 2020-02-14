@@ -29,6 +29,7 @@ export function primary<T> (params: {
 export function prop (params: {
   name?: string
   type?: SqliteNative | SqliteExt
+  index?: boolean
   unique?: boolean
   null?: boolean
   references?: string
@@ -46,6 +47,7 @@ export function prop (params: {
       type,
       unique: (params && params.unique) ? params.unique : false,
       null: (params && params.null) ? params.null : false,
+      index: (params && params.index) ? params.index : false,
       references: (params && params.references) ? params.references : undefined,
       default: (params && params.default) ? params.default : undefined,
     } as IPropRow
@@ -106,14 +108,15 @@ export const typeMap: Record<string, SqliteNative | SqliteExt> = {
 export interface IPrimaryRow<T> {
   name: (keyof T | '_id') | (keyof T)[]
   type?: SqliteNative
-  autoincrement?: boolean
+  autoincrement: boolean
   default?: any
 }
 
 export interface IPropRow {
   type: SqliteNative | SqliteExt
-  unique?: boolean
-  null?: boolean
+  unique: boolean
+  null: boolean
+  index: boolean
   references?: string
   default?: any
 }
