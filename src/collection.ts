@@ -5,11 +5,11 @@ import nanoid from 'nanoid'
 import { ISqliteMeta, IPropRow } from './decorators'
 
 export type SqliteNative = 'string' | 'integer' | 'float' | 'binary'
-export type SqliteExt = 'datetime' | 'JSON' | 'strArray'
+export type SqliteExt = 'datetime' | 'JSON' | 'strArray' | 'boolean'
 
 interface ITransformer<T> {
-  get: (repr: string | null) => T | null
-  set: (data: T) => string | null
+  get: (repr: any) => T | null
+  set: (data: T) => any
 }
 
 export interface ISql {
@@ -109,6 +109,10 @@ export class Collection<T> extends Emittery.Typed<{
           get: (repr) => repr ? repr.trim().split('\x1f') : null,
           set: (d) => d ? '\x1f' + d.join('\x1f') + '\x1f' : null,
         },
+        boolean: {
+          get: (repr) => typeof repr === 'number' ? !!repr : null,
+          set: (d) => typeof d === 'boolean' ? Number(d) : null,
+        },
       },
       createdAt,
       updatedAt,
@@ -135,6 +139,7 @@ export class Collection<T> extends Emittery.Typed<{
       datetime: 'JSON',
       JSON: 'JSON',
       strArray: 'TEXT',
+      boolean: 'INTEGER',
     }
 
     const getDefault = (k: string, v: {
