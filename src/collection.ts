@@ -300,13 +300,13 @@ export class Collection<T> extends Emittery.Typed<{
 
     let postfix = options.postfix || ''
     if (options.sort) {
-      postfix += `ORDER BY ${safeColumnName(options.sort.key as string)} ${options.sort.desc ? 'DESC' : 'ASC'} `
+      postfix += ` ORDER BY ${safeColumnName(options.sort.key as string)} ${options.sort.desc ? 'DESC' : 'ASC'}`
     }
     if (options.limit) {
-      postfix += `LIMIT ${options.limit} `
+      postfix += ` LIMIT ${options.limit}`
     }
     if (options.offset) {
-      postfix += `OFFSET ${options.offset} `
+      postfix += ` OFFSET ${options.offset}`
     }
 
     await this.emit('pre-find', { cond, fields, options: { postfix } })
@@ -368,7 +368,7 @@ export class Collection<T> extends Emittery.Typed<{
   ) {
     const postfix = options.postfix || ''
     // if (options.limit) {
-    //   postfix += `LIMIT ${options.limit} `
+    //   postfix += ` LIMIT ${options.limit}`
     // }
 
     await this.emit('pre-update', { cond, set, options: { postfix } })
@@ -424,7 +424,7 @@ export class Collection<T> extends Emittery.Typed<{
   ) {
     const postfix = options.postfix || ''
     // if (options.limit) {
-    //   postfix += `LIMIT ${options.limit} `
+    //   postfix += ` LIMIT ${options.limit}`
     // }
 
     await this.emit('pre-delete', { cond, options: { postfix } })
@@ -593,13 +593,13 @@ class Chain<T> extends Emittery.Typed<{
   ): Promise<Array<Record<string, Record<string, any>>>> {
     let postfix = options.postfix || ''
     if (options.sort) {
-      postfix += `ORDER BY ${safeColumnName(options.sort.key)} ${options.sort.desc ? 'DESC' : 'ASC'} `
+      postfix += ` ORDER BY ${safeColumnName(options.sort.key)} ${options.sort.desc ? 'DESC' : 'ASC'}`
     }
     if (options.limit) {
-      postfix += `LIMIT ${options.limit} `
+      postfix += ` LIMIT ${options.limit}`
     }
     if (options.offset) {
-      postfix += `OFFSET ${options.offset} `
+      postfix += ` OFFSET ${options.offset}`
     }
 
     await this.emit('pre-data', { cond, options: { postfix } })
