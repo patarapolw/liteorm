@@ -2,10 +2,8 @@ import sqlite from 'sqlite'
 import Emittery from 'emittery'
 import nanoid from 'nanoid'
 
-import { ISqliteMeta, IPropRow } from './decorators'
-
-export type SqliteNative = 'string' | 'integer' | 'float' | 'binary'
-export type SqliteExt = 'datetime' | 'JSON' | 'strArray' | 'boolean'
+import { ISqliteMeta, IPropRow, SqliteExt, SqliteAllTypes } from './decorators'
+import { Db } from './db'
 
 interface ITransformer<T> {
   get: (repr: any) => T | null
@@ -17,71 +15,72 @@ export interface ISql {
   $params: Record<string, any>
 }
 
-export type IEntry<T> = T & {
-  createdAt?: Date
-  updatedAt?: Date
-}
-
 export class Collection<T> extends Emittery.Typed<{
-  'build': ISql
+  'build-sql': ISql
   'pre-create': {
-    entry: IEntry<T>
+    entry: T
     options: {
       postfix: string[]
     }
   }
-  'create': ISql
+  'create-sql': ISql
   'pre-find': {
     cond: Record<string, any>
     /**
-     * Fields are mostly `keyof IEntry<T>`, but can also be functions, like `COUNT(_id)`
+     * Fields are mostly `keyof T`, but can also be functions, like `COUNT(_id)`
      */
     fields: Record<string, string>
     options: {
       postfix: string[]
     }
   }
-  'find': ISql
+  'find-sql': ISql
   'pre-update': {
     cond: Record<string, any>
-    set: Partial<IEntry<T>>
+    set: Partial<T>
     options: {
       postfix: string[]
     }
   }
-  'update': ISql
+  'update-sql': ISql
   'pre-delete': {
     cond: Record<string, any>
     options: {
       postfix: string[]
     }
   }
-  'delete': ISql
+  'delete-sql': ISql
 }> {
+  static make<T> (T: { new(): T }) {
+    const t = new T()
+    return new Collection(t)
+  }
+
+  static async init (db: Db, cols: Collection<any>[], build = true) {
+    for (const c of cols) {
+      await c.init(db, build)
+    }
+  }
+
   __meta: {
     fields: Array<keyof T | '_id'>
     transform: Record<SqliteExt, ITransformer<any>>
-  } & ISqliteMeta<IEntry<T>>
+  } & ISqliteMeta<T>
 
-  db: sqlite.Database
+  sql!: sqlite.Database
   name: string
 
-  constructor (
-    db: sqlite.Database,
-    model: T,
-  ) {
+  constructor (model: T) {
     super()
-
     const { name, primary, unique, prop, createdAt, updatedAt } = (model as any).__meta as ISqliteMeta<T>
 
-    this.db = db
     this.name = name
-    const fields: Array<keyof T | '_id'> = []
+    const fields: (keyof T | '_id')[] = []
     if (primary.name) {
       if (Array.isArray(primary.name)) {
-        fields.push(...primary.name)
+        fields.push(...primary.name as any[])
       } else {
-        fields.push(primary.name)
+        fields.push(primary.name as any)
       }
     }
     fields.push(...Object.keys(prop) as any[])
@@ -92,25 +91,30 @@ export class Collection<T> extends Emittery.Typed<{
       prop: {
         ...prop,
         createdAt: createdAt ? { type: 'datetime', null: false, default: () => new Date() } : undefined,
-        updatedAt: updatedAt ? { type: 'datetime', null: false, default: () => new Date() } : undefined,
+        updatedAt: updatedAt ? {
+          type: 'datetime',
+          null: false,
+          default: () => new Date(),
+          onUpdate: () => new Date(),
+        } : undefined,
       },
       fields,
       unique,
       transform: {
-        datetime: {
-          get: (repr) => repr ? new Date(JSON.parse(repr).$milli) : null,
-          set: (d) => d ? JSON.stringify({ $string: d.toISOString(), $milli: +d }) : null,
+        Date: {
+          get: (repr) => typeof repr === 'number' ? new Date(repr) : null,
+          set: (d) => d ? d instanceof Date ? +d : +new Date(d) : null,
         },
         JSON: {
           get: (repr) => repr ? JSON.parse(repr) : null,
           set: (data) => data ? JSON.stringify(data) : null,
         },
-        strArray: {
+        StrArray: {
           get: (repr) => repr ? repr.trim().split('\x1f') : null,
           set: (d) => d ? '\x1f' + d.join('\x1f') + '\x1f' : null,
         },
-        boolean: {
-          get: (repr) => typeof repr === 'number' ? !!repr : null,
+        Boolean: {
+          get: (repr) => typeof repr === 'number' ? repr !== 0 : null,
           set: (d) => typeof d === 'boolean' ? Number(d) : null,
         },
       },
@@ -118,11 +122,15 @@ export class Collection<T> extends Emittery.Typed<{
       updatedAt,
     }
 
-    if (updatedAt) {
-      this.on('pre-update', ({ set }) => {
-        set.updatedAt = set.updatedAt || new Date()
-      })
-    }
+    Object.entries(this.__meta.prop).map(([k, v]) => {
+      const { onUpdate } = v as any
+
+      if (onUpdate) {
+        this.on('pre-update', async ({ set }) => {
+          (set as any)[k] = (set as any)[k] || (typeof onUpdate === 'function' ? await onUpdate(set) : v)
+        })
+      }
+    })
   }
 
   /**
@@ -130,16 +138,21 @@ export class Collection<T> extends Emittery.Typed<{
    *
    * Has no effect if call repeatedly.
    */
-  async build () {
-    const typeMap: Record<SqliteNative | SqliteExt, string> = {
-      string: 'TEXT',
-      integer: 'INTEGER',
-      float: 'FLOAT',
-      binary: 'BLOB',
-      datetime: 'JSON',
+  async init (db: Db, build = true) {
+    this.sql = db.sql
+    if (!build) {
+      return this
+    }
+
+    const typeMap: Record<SqliteAllTypes, string> = {
+      TEXT: 'TEXT',
+      INTEGER: 'INTEGER',
+      REAL: 'REAL',
+      BLOB: 'BLOB',
+      Date: 'INTEGER',
       JSON: 'JSON',
-      strArray: 'TEXT',
-      boolean: 'INTEGER',
+      StrArray: 'TEXT',
+      Boolean: 'INTEGER',
     }
 
     const getDefault = (k: string, v: {
@@ -153,8 +166,8 @@ export class Collection<T> extends Emittery.Typed<{
       } else if (typeof v.default === 'boolean') {
         return `DEFAULT ${v.default ? 1 : 0}`
       } else if (typeof v.default === 'function') {
-        this.on('pre-create', ({ entry }) => {
-          (entry as any)[k] = (entry as any)[k] || v.default!(entry)
+        this.on('pre-create', async ({ entry }) => {
+          (entry as any)[k] = (entry as any)[k] || await v.default!(entry)
         })
       } else if (v.type && (this.__meta.transform as any)[v.type]) {
         return `DEFAULT ${(this.__meta.transform as any)[v.type].set(v.default)}`
@@ -213,18 +226,24 @@ export class Collection<T> extends Emittery.Typed<{
       $params: [],
     }
 
-    await this.emit('build', sql)
-    await this.db.exec(sql.$statement)
+    await this.emit('build-sql', sql)
+    await this.sql.exec(sql.$statement)
 
     for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
       if (v && v.index) {
-        await this.db.exec([
-          'CREATE INDEX IF NOT EXISTS',
-          `${k}__idx`,
-          'ON',
-          `${safeColumnName(this.name)}`,
-          `(${safeColumnName(k)})`,
-        ].join(' '))
+        const sql: ISql = {
+          $statement: [
+            'CREATE INDEX IF NOT EXISTS',
+            `${k}__idx`,
+            'ON',
+            `${safeColumnName(this.name)}`,
+            `(${safeColumnName(k)})`,
+          ].join(' '),
+          $params: [],
+        }
+
+        await this.emit('build-sql', sql)
+        await this.sql.exec(sql.$statement)
       }
     }
 
@@ -278,8 +297,8 @@ export class Collection<T> extends Emittery.Typed<{
       $params: values,
     }
 
-    await this.emit('create', sql)
-    const r = await this.db.run(sql.$statement, sql.$params)
+    await this.emit('create-sql', sql)
+    const r = await this.sql.run(sql.$statement, sql.$params)
 
     return r.lastID
   }
@@ -296,7 +315,7 @@ export class Collection<T> extends Emittery.Typed<{
     options: {
       postfix?: string
       sort?: {
-        key: keyof IEntry<T>
+        key: keyof T
         desc?: boolean
       }
       offset?: number
@@ -345,8 +364,8 @@ export class Collection<T> extends Emittery.Typed<{
       $params: where ? where.$params : {},
     }
 
-    await this.emit('find', sql)
-    const r = (await this.db.all(sql.$statement, sql.$params)).map((el) => this._loadData(el))
+    await this.emit('find-sql', sql)
+    const r = (await this.sql.all(sql.$statement, sql.$params)).map((el) => this._loadData(el))
 
     return r
   }
@@ -372,7 +391,7 @@ export class Collection<T> extends Emittery.Typed<{
    */
   async update (
     cond: Record<string, any>,
-    set: Partial<IEntry<T>>,
+    set: Partial<T>,
     options: {
       postfix?: string
       // limit?: number
@@ -418,8 +437,8 @@ export class Collection<T> extends Emittery.Typed<{
       },
     }
 
-    await this.emit('update', sql)
-    await this.db.run(sql.$statement, sql.$params)
+    await this.emit('update-sql', sql)
+    await this.sql.run(sql.$statement, sql.$params)
   }
 
   /**
@@ -452,8 +471,8 @@ export class Collection<T> extends Emittery.Typed<{
       $params: (where ? where.$params : {}),
     }
 
-    await this.emit('delete', sql)
-    await this.db.run(sql.$statement, sql.$params)
+    await this.emit('delete-sql', sql)
+    await this.sql.run(sql.$statement, sql.$params)
   }
 
   /**
@@ -546,8 +565,8 @@ class Chain<T> extends Emittery.Typed<{
     this.from.push(`FROM ${safeColumnName(firstCol.name)}`)
   }
 
-  get db () {
-    return this.firstCol.db
+  get sql () {
+    return this.firstCol.sql
   }
 
   /**
@@ -561,7 +580,7 @@ class Chain<T> extends Emittery.Typed<{
   join<U> (
     to: Collection<U>,
     foreignField: string | [string, string],
-    localField: keyof IEntry<U> = '_id' as any,
+    localField: keyof U = '_id' as any,
     select?: Array<keyof U> | Record<keyof U, string> | null,
     type?: 'left' | 'inner',
   ): this {
@@ -630,7 +649,7 @@ class Chain<T> extends Emittery.Typed<{
 
     await this.emit('data', sql)
 
-    return (await this.db.all(sql.$statement, sql.$params)).map((c) => {
+    return (await this.sql.all(sql.$statement, sql.$params)).map((c) => {
       return this.transformRow(c)
     })
   }

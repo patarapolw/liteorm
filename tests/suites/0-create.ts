@@ -6,10 +6,20 @@ import nanoid from 'nanoid'
 
 import { Db, Table, primary, prop, Collection } from '../../src'
 
+@Table({ name: 'note', timestamp: true })
+class DbNote {
+  @primary({ autoincrement: true }) _id?: number
+  @prop({ unique: true }) key?: string
+  @prop() data!: Record<string, any>
+  @prop() order!: Record<string, number>
+}
+
+const dbNote = Collection.make(DbNote)
+
 @Table({ name: 'card', timestamp: true })
 class DbCard {
   @primary() _id!: string
-  @prop({ references: 'note(_id)' }) noteId!: number
+  @prop({ references: dbNote }) noteId!: number
   @prop() front!: string
   @prop({ null: true }) back?: string
   @prop({ null: true }) nextReview?: Date
@@ -22,6 +32,8 @@ class DbCard {
   }
 }
 
+const dbCard = Collection.make(DbCard)
+
 @Table({ name: 'media', timestamp: true })
 class DbMedia {
   @primary({ autoincrement: true }) _id?: number
@@ -29,23 +41,18 @@ class DbMedia {
   @prop() data!: ArrayBuffer
 }
 
-@Table({ name: 'note', timestamp: true })
-class DbNote {
-  @primary({ autoincrement: true }) _id?: number
-  @prop({ unique: true }) key?: string
-  @prop() data!: Record<string, any>
-  @prop() order!: Record<string, number>
-}
+const dbMedia = Collection.make(DbMedia)
 
 export async function initDatabase (filename: string = 'tests/test.db') {
   const db = await Db.connect(filename)
+  await Collection.init(db, [dbNote, dbCard, dbMedia])
 
   _db = {
     db,
     cols: {
-      note: await db.collection(new DbNote()),
-      media: await db.collection(new DbMedia()),
-      card: await db.collection(new DbCard()),
+      note: dbNote,
+      media: dbMedia,
+      card: dbCard,
     },
   }
 

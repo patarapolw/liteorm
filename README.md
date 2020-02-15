@@ -31,10 +31,10 @@ npm i liteorm
 
 ## Caveats
 
-- Type `Number` by default is associated with `INTEGER`. To change it to `FLOAT`, use
+- Type `Number` by default is associated with `INTEGER`. To change it to `REAL` (float), use
 
 ```typescript
-@prop({type: 'float'}) f!: number;
+@prop({type: 'REAL'}) f!: number;
 ```
 
 - `BLOB` is associated with Type `ArrayBuffer`.
@@ -42,5 +42,3 @@ npm i liteorm
 ```typescript
 @prop() data!: ArrayBuffer;
 ```
-
-- `references`, i.e. Foreign Key, is currently implemented at `CREATE TABLE` only. Joins (chaining) still has to be done manually.

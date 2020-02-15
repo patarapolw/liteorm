@@ -1,12 +1,14 @@
 import crypto from 'crypto'
 
-import Db, { Table, primary, prop } from '../src'
+import { Db, Table, Collection, primary, prop } from '../src'
 
 @Table({ name: 'deck' })
 class DbDeck {
   @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) name!: string
 }
+
+const dbDeck = Collection.make(DbDeck)
 
 @Table({ name: 'source' })
 class DbSource {
@@ -16,42 +18,50 @@ class DbSource {
   @prop() created!: Date
 }
 
+const dbSource = Collection.make(DbSource)
+
 @Table({ name: 'template', unique: [['front', 'back', 'css', 'js']] })
 class DbTemplate {
   @primary({ autoincrement: true }) _id?: number
   @prop() name!: string
-  @prop({ references: 'source(_id)', null: true }) sourceId?: number
+  @prop({ references: dbSource, null: true }) sourceId?: number
   @prop() front!: string
   @prop({ null: true }) back?: string
   @prop({ null: true }) css?: string
   @prop({ null: true }) js?: string
 }
 
+const dbTemplate = Collection.make(DbTemplate)
+
 @Table({ name: 'note' })
 class DbNote {
   @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) key?: string
   @prop() name!: string
-  @prop({ references: 'source(_id)', null: true }) sourceId?: number
+  @prop({ references: dbSource, null: true }) sourceId?: number
   @prop() data!: Record<string, any>
   @prop() order!: Record<string, number>
 }
+
+const dbNote = Collection.make(DbNote)
 
 @Table({ name: 'media' })
 class DbMedia {
   @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) h?: string
-  @prop({ references: 'source(_id)', null: true }) sourceId?: number
+  @prop({ references: dbSource, null: true }) sourceId?: number
   @prop() name!: string
   @prop() data!: ArrayBuffer
 }
 
+const dbMedia = Collection.make(DbMedia)
+
 @Table({ name: 'card' })
 class DbCard {
   @primary() _id!: string
-  @prop({ references: 'deck(_id)' }) deckId!: number
-  @prop({ references: 'template(_id)', null: true }) templateId?: number
-  @prop({ references: 'note(_id)', null: true }) noteId?: number
+  @prop({ references: dbDeck }) deckId!: number
+  @prop({ references: dbTemplate, null: true }) templateId?: number
+  @prop({ references: dbNote, null: true }) noteId?: number
   @prop() front!: string
   @prop({ null: true }) back?: string
   @prop({ null: true }) mnemonic?: string
@@ -65,17 +75,14 @@ class DbCard {
   }
 }
 
-(async () => {
+const dbCard = Collection.make(DbCard)
+
+;(async () => {
   const db = await Db.connect('test.db')
 
-  await db.collection(new DbDeck())
-  await db.collection(new DbSource())
-  await db.collection(new DbTemplate())
-  const note = await db.collection(new DbNote())
-  await db.collection(new DbMedia())
-  await db.collection(new DbCard())
+  Collection.init(db, [dbDeck, dbSource, dbTemplate, dbNote, dbMedia, dbCard])
 
-  note.on('pre-create', async (p) => {
+  dbNote.on('pre-create', async (p) => {
     if (!p.entry.key) {
       p.entry.key = await new Promise((resolve, reject) => {
         crypto.randomBytes(48, (err, buffer) => {
