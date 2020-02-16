@@ -4,25 +4,21 @@ import { Db, Table, Collection, primary, prop } from '../src'
 
 @Table({ name: 'deck' })
 class DbDeck {
-  @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) name!: string
 }
 
 const dbDeck = Collection.make(DbDeck)
 
-@Table({ name: 'source' })
+@Table({ name: 'source', timestamp: true })
 class DbSource {
-  @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) h!: string
   @prop() name!: string
-  @prop() created!: Date
 }
 
 const dbSource = Collection.make(DbSource)
 
 @Table({ name: 'template', unique: [['front', 'back', 'css', 'js']] })
 class DbTemplate {
-  @primary({ autoincrement: true }) _id?: number
   @prop() name!: string
   @prop({ references: dbSource, null: true }) sourceId?: number
   @prop() front!: string
@@ -35,7 +31,6 @@ const dbTemplate = Collection.make(DbTemplate)
 
 @Table({ name: 'note' })
 class DbNote {
-  @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) key?: string
   @prop() name!: string
   @prop({ references: dbSource, null: true }) sourceId?: number
@@ -47,7 +42,6 @@ const dbNote = Collection.make(DbNote)
 
 @Table({ name: 'media' })
 class DbMedia {
-  @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) h?: string
   @prop({ references: dbSource, null: true }) sourceId?: number
   @prop() name!: string
@@ -65,7 +59,7 @@ class DbCard {
   @prop() front!: string
   @prop({ null: true }) back?: string
   @prop({ null: true }) mnemonic?: string
-  @prop({ null: true }) srsLevel?: number
+  @prop({ null: true, type: 'int' }) srsLevel?: number
   @prop({ null: true }) nextReview?: Date
   @prop({ null: true }) tag?: string[]
   @prop() created!: Date

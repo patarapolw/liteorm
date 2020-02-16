@@ -8,7 +8,6 @@ import { Db, Table, primary, prop, Collection } from '../../src'
 
 @Table({ name: 'note', timestamp: true })
 class DbNote {
-  @primary({ autoincrement: true }) _id?: number
   @prop({ unique: true }) key?: string
   @prop() data!: Record<string, any>
   @prop() order!: Record<string, number>
@@ -19,7 +18,7 @@ const dbNote = Collection.make(DbNote)
 @Table({ name: 'card', timestamp: true })
 class DbCard {
   @primary() _id!: string
-  @prop({ references: dbNote }) noteId!: number
+  @prop({ references: dbNote }) noteId!: any
   @prop() front!: string
   @prop({ null: true }) back?: string
   @prop({ null: true }) nextReview?: Date
@@ -30,13 +29,15 @@ class DbCard {
   }) stat?: {
     streak: { right: number; wrong: number }
   }
+
+  @prop({ type: 'int', default: () => Math.random() * 1000 }) randomInt?: number
+  @prop({ default: () => Math.random() }) randomFloat?: number
 }
 
 const dbCard = Collection.make(DbCard)
 
 @Table({ name: 'media', timestamp: true })
 class DbMedia {
-  @primary({ autoincrement: true }) _id?: number
   @prop() name!: string
   @prop() data!: ArrayBuffer
 }

@@ -5,6 +5,7 @@ A simple wrapper for [sqlite](sqlite); with typings based on [TypeScript decorat
 [![npm version](https://badge.fury.io/js/liteorm.svg)](https://badge.fury.io/js/liteorm)
 
 - Async eventemitter ([emittery](https://www.npmjs.com/package/emittery)).
+- Auto-define `_id` as `PRIMARY KEY INTEGER AUTOINCREMENT` (Use `_id` as default name for primary key.)
 - JSON, Date, and MongoDB interop.
 - Query with JSON, and tested with <https://q2search.herokuapp.com/LiteORM>, using MongoDB-like languages, with some differences (for example, `$regex` is currently not supported, use `$like`, `$nlike`, `$substr`, `$nsubstr` instead.)
 - JSON querying is supported via JSON1 extension. I made it easy to query using dot notation, just like MongoDB.

@@ -1,9 +1,9 @@
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
-import nanoid from 'nanoid'
 
-import { ISqliteMeta, IPropRow, SqliteExt, SqliteAllTypes } from './decorators'
+import { ISqliteMeta, IPropRow } from './decorators'
 import { Db } from './db'
+import { safeColumnName, safeId, SqliteExt, AliasToSqliteType } from './utils'
 
 interface ITransformer<T> {
   get: (repr: any) => T | null
@@ -90,9 +90,9 @@ export class Collection<T> extends Emittery.Typed<{
       primary,
       prop: {
         ...prop,
-        createdAt: createdAt ? { type: 'datetime', null: false, default: () => new Date() } : undefined,
+        createdAt: createdAt ? { type: 'Date', null: false, default: () => new Date() } : undefined,
         updatedAt: updatedAt ? {
-          type: 'datetime',
+          type: 'Date',
           null: false,
           default: () => new Date(),
           onUpdate: () => new Date(),
@@ -144,22 +144,13 @@ export class Collection<T> extends Emittery.Typed<{
       return this
     }
 
-    const typeMap: Record<SqliteAllTypes, string> = {
-      TEXT: 'TEXT',
-      INTEGER: 'INTEGER',
-      REAL: 'REAL',
-      BLOB: 'BLOB',
-      Date: 'INTEGER',
-      JSON: 'JSON',
-      StrArray: 'TEXT',
-      Boolean: 'INTEGER',
-    }
-
     const getDefault = (k: string, v: {
       default?: any
-      type?: string
+      type?: keyof typeof AliasToSqliteType
     }) => {
-      if (typeof v.default === 'string') {
+      if (typeof v.default === 'undefined') {
+        return ''
+      } else if (typeof v.default === 'string') {
         return `DEFAULT '${v.default.replace(/'/g, "[']")}'`
       } else if (typeof v.default === 'number') {
         return `DEFAULT ${v.default}`
@@ -169,6 +160,7 @@ export class Collection<T> extends Emittery.Typed<{
         this.on('pre-create', async ({ entry }) => {
           (entry as any)[k] = (entry as any)[k] || await v.default!(entry)
         })
+        return ''
       } else if (v.type && (this.__meta.transform as any)[v.type]) {
         return `DEFAULT ${(this.__meta.transform as any)[v.type].set(v.default)}`
       }
@@ -181,7 +173,7 @@ export class Collection<T> extends Emittery.Typed<{
     if (this.__meta.primary.type) {
       col.push([
         safeColumnName(this.__meta.primary.name as string),
-        typeMap[this.__meta.primary.type] || 'INTEGER',
+        AliasToSqliteType[this.__meta.primary.type as keyof typeof AliasToSqliteType] || 'INTEGER',
         'PRIMARY KEY',
         this.__meta.primary.autoincrement ? 'AUTOINCREMENT' : '',
         getDefault(this.__meta.primary.name as string, this.__meta.primary),
@@ -192,7 +184,7 @@ export class Collection<T> extends Emittery.Typed<{
       if (v && v.type) {
         col.push([
           safeColumnName(k),
-          typeMap[v.type] || 'INTEGER',
+          AliasToSqliteType[v.type as keyof typeof AliasToSqliteType] || 'TEXT',
           v.unique ? 'UNIQUE' : '',
           v.null ? '' : 'NOT NULL',
           getDefault(k, v),
@@ -284,7 +276,7 @@ export class Collection<T> extends Emittery.Typed<{
       }
 
       bracketed.push(k)
-      Object.assign(values, { [`$${getId()}`]: v })
+      Object.assign(values, { [`$${safeId()}`]: v })
     }
 
     const sql = {
@@ -417,7 +409,7 @@ export class Collection<T> extends Emittery.Typed<{
           v = tr.set(v)
         }
 
-        const id = `$${getId()}`
+        const id = `$${safeId()}`
 
         setK.push(`${k} = ${id}`)
         setV[id] = v
@@ -580,7 +572,7 @@ class Chain<T> extends Emittery.Typed<{
   join<U> (
     to: Collection<U>,
     foreignField: string | [string, string],
-    localField: keyof U = '_id' as any,
+    localField: keyof U | '_id' = '_id' as any,
     select?: Array<keyof U> | Record<keyof U, string> | null,
     type?: 'left' | 'inner',
   ): this {
@@ -745,16 +737,16 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
       v = +v
     }
 
-    const id = `$${getId()}`
+    const id = `$${safeId()}`
 
     if (v) {
       if (Array.isArray(v)) {
         if (v.length > 1) {
-          const vObj = v.reduce((prev, c) => ({ ...prev, [`$${getId()}`]: c }), {})
+          const vObj = v.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
           cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
           Object.assign($params, vObj)
         } else if (v.length === 1) {
-          const id = `$${getId()}`
+          const id = `$${safeId()}`
           cList.push(`${k} = ${id}`)
           Object.assign($params, { [id]: v[0] })
         }
@@ -765,22 +757,22 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
           switch (op) {
             case '$in':
               if (v1.length > 1) {
-                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${getId()}`]: c }), {})
+                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
                 cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
                 Object.assign($params, vObj)
               } else if (v1.length === 1) {
-                const id = `$${getId()}`
+                const id = `$${safeId()}`
                 cList.push(`${k} = ${id}`)
                 Object.assign($params, { [id]: v1[0] })
               }
               break
             case '$nin':
               if (v1.length > 1) {
-                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${getId()}`]: c }), {})
+                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
                 cList.push(`${k} NOT IN (${Object.keys(vObj).join(',')})`)
                 Object.assign($params, vObj)
               } else {
-                const id = `$${getId()}`
+                const id = `$${safeId()}`
                 cList.push(`${k} != ${id}`)
                 Object.assign($params, { [id]: v1[0] })
               }
@@ -856,171 +848,4 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
     $statement: cList.join(' AND ') || 'TRUE',
     $params,
   }
-}
-
-/**
- * https://stackoverflow.com/questions/31788990/sqlite-what-are-the-restricted-characters-for-identifiers
- */
-function getId () {
-  return nanoid().replace(/-/g, '$')
-}
-
-/**
- * https://www.sqlite.org/lang_keywords.html
- * @param s identifier
- */
-function safeColumnName (s: string) {
-  const keywords = `
-    ABORT
-    ACTION
-    ADD
-    AFTER
-    ALL
-    ALTER
-    ALWAYS
-    ANALYZE
-    AND
-    AS
-    ASC
-    ATTACH
-    AUTOINCREMENT
-    BEFORE
-    BEGIN
-    BETWEEN
-    BY
-    CASCADE
-    CASE
-    CAST
-    CHECK
-    COLLATE
-    COLUMN
-    COMMIT
-    CONFLICT
-    CONSTRAINT
-    CREATE
-    CROSS
-    CURRENT
-    CURRENT_DATE
-    CURRENT_TIME
-    CURRENT_TIMESTAMP
-    DATABASE
-    DEFAULT
-    DEFERRABLE
-    DEFERRED
-    DELETE
-    DESC
-    DETACH
-    DISTINCT
-    DO
-    DROP
-    EACH
-    ELSE
-    END
-    ESCAPE
-    EXCEPT
-    EXCLUDE
-    EXCLUSIVE
-    EXISTS
-    EXPLAIN
-    FAIL
-    FILTER
-    FIRST
-    FOLLOWING
-    FOR
-    FOREIGN
-    FROM
-    FULL
-    GENERATED
-    GLOB
-    GROUP
-    GROUPS
-    HAVING
-    IF
-    IGNORE
-    IMMEDIATE
-    IN
-    INDEX
-    INDEXED
-    INITIALLY
-    INNER
-    INSERT
-    INSTEAD
-    INTERSECT
-    INTO
-    IS
-    ISNULL
-    JOIN
-    KEY
-    LAST
-    LEFT
-    LIKE
-    LIMIT
-    MATCH
-    NATURAL
-    NO
-    NOT
-    NOTHING
-    NOTNULL
-    NULL
-    NULLS
-    OF
-    OFFSET
-    ON
-    OR
-    ORDER
-    OTHERS
-    OUTER
-    OVER
-    PARTITION
-    PLAN
-    PRAGMA
-    PRECEDING
-    PRIMARY
-    QUERY
-    RAISE
-    RANGE
-    RECURSIVE
-    REFERENCES
-    REGEXP
-    REINDEX
-    RELEASE
-    RENAME
-    REPLACE
-    RESTRICT
-    RIGHT
-    ROLLBACK
-    ROW
-    ROWS
-    SAVEPOINT
-    SELECT
-    SET
-    TABLE
-    TEMP
-    TEMPORARY
-    THEN
-    TIES
-    TO
-    TRANSACTION
-    TRIGGER
-    UNBOUNDED
-    UNION
-    UNIQUE
-    UPDATE
-    USING
-    VACUUM
-    VALUES
-    VIEW
-    VIRTUAL
-    WHEN
-    WHERE
-    WINDOW
-    WITH
-    WITHOUT`
-    .split('\n')
-    .map((el) => el.trim())
-    .filter((el) => el)
-
-  const kwRegex = new RegExp(`(^|[^A-Z])(${keywords.join('|')})($|[^A-Z])`, 'gi')
-
-  return s.replace(kwRegex, '$1"$2"$3')
 }

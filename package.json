@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -48,6 +48,6 @@
     "faker": "^4.1.0",
     "mocha": "^6.x",
     "ts-mocha": "^6.0.0",
-    "typescript": "^3.6.2"
+    "typescript": "^3.7.5"
   }
 }

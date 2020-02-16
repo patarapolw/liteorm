@@ -11,7 +11,6 @@ describe('CRUD', function () {
 
   before(async () => {
     await createDatabase()
-    // await initDatabase()
   })
 
   read()
