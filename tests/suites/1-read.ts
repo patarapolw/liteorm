@@ -18,7 +18,7 @@ export default () => describe('readDatabase', () => {
       // db.cols.card.on('find', console.log)
 
       console.dir(await db.cols.card.find(cond, { 'COUNT(*)': 'count' }), { depth: null })
-      console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview'], {
+      console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview', 'isCool'], {
         sort: {
           key: 'front',
           desc: true,

@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { Collection } from './collection'
-import { AliasToSqliteType, AliasToJSType } from './utils'
+import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias } from './utils'
 
 export function primary<
   T extends AliasToJSType[TSql] = any,
@@ -17,9 +17,7 @@ export function primary<
     const t = Reflect.getMetadata('design:type', target, key)
 
     let type: keyof typeof AliasToSqliteType = params.type || t.name
-    if (type === 'Object') {
-      type = 'JSON'
-    }
+    type = normalizeAlias(type)
 
     const name = params.name || key as string || '_id'
     const autoincrement = !!params.autoincrement && ['INTEGER', 'REAL'].includes(AliasToSqliteType[type])
@@ -27,7 +25,7 @@ export function primary<
       type = 'int'
     }
 
-    const primary: IPrimaryRow<T, Entry, TSql> = {
+    const primary: IPrimaryRow<T, Entry> = {
       name,
       type: type as any,
       autoincrement,
@@ -70,9 +68,7 @@ export function prop<
         : (params.references.col.__meta.prop[params.references.key] || {}).type
       : params.type || t.name
 
-    if (type === 'Object') {
-      type = 'JSON'
-    }
+    type = normalizeAlias(type)
 
     const prop = Reflect.getMetadata('sqlite:prop', target) || {}
 
@@ -84,7 +80,7 @@ export function prop<
       references,
       default: params.default ? params.default : undefined,
       onUpdate: params.onUpdate,
-    } as IPropRow<T, Entry, TSql>
+    } as IPropRow<T, Entry>
 
     Reflect.defineMetadata('sqlite:prop', prop, target)
   }
@@ -135,7 +131,7 @@ export function Table<T> (params: {
 export interface IPrimaryRow<
   T extends AliasToJSType[TSql] = any,
   Entry = any,
-  TSql extends keyof typeof AliasToSqliteType = any
+  TSql extends SqliteAllTypes = any
 > {
   name: string | string[]
   type?: TSql
@@ -147,7 +143,7 @@ export interface IPrimaryRow<
 export interface IPropRow<
   T extends AliasToJSType[TSql] = any,
   Entry = any,
-  TSql extends keyof typeof AliasToSqliteType = any
+  TSql extends SqliteAllTypes = any
 > {
   type: TSql
   unique: boolean

@@ -218,24 +218,67 @@ export interface AliasToJSType extends Record<keyof typeof AliasToSqliteType, an
   /**
    * Class name types
    */
-  String: string
-  Number: number
+  String: string // TEXT
+  Number: number // REAL
   Date: Date
-  ArrayBuffer: ArrayBuffer
+  ArrayBuffer: ArrayBuffer // BLOB
   Boolean: boolean
-  Object: Record<string, any> | any[]
+  Object: Record<string, any> | any[] // JSON
   /**
    * Additional aliases
    */
   JSON: Record<string, any> | any[]
   StrArray: string[]
-  str: string
-  string: string
-  int: number
-  integer: number
-  float: number
-  bin: ArrayBuffer
-  binary: ArrayBuffer
-  boolean: boolean
-  bool: boolean
+  str: string // TEXT
+  string: string // TEXT
+  int: number // INTEGER
+  integer: number // INTEGER
+  float: number // REAL
+  bin: ArrayBuffer // BLOB
+  binary: ArrayBuffer // BLOB
+  boolean: boolean // Boolean
+  bool: boolean // Boolean
+}
+
+const normalizer = `
+/**
+ * Class name types
+ */
+String: string // TEXT
+Number: number // REAL
+Date: Date
+ArrayBuffer: ArrayBuffer // BLOB
+Boolean: boolean
+Object: Record<string, any> | any[] // JSON
+/**
+ * Additional aliases
+ */
+JSON: Record<string, any> | any[]
+StrArray: string[]
+str: string // TEXT
+string: string // TEXT
+int: number // INTEGER
+integer: number // INTEGER
+float: number // REAL
+bin: ArrayBuffer // BLOB
+binary: ArrayBuffer // BLOB
+boolean: boolean // Boolean
+bool: boolean // Boolean
+  `.split('\n')
+  .map((r) => r.trim())
+  .map((r) => {
+    if (r) {
+      const m = /^(.+?):.+?\/\/ (.+)$/.exec(r)
+      if (m) {
+        return [m[1], m[2]]
+      }
+    }
+    return null
+  })
+  .filter((r) => r)
+  .map((r) => r as any[])
+  .reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {}) as Record<string, SqliteAllTypes>
+
+export function normalizeAlias (k: keyof AliasToJSType): SqliteAllTypes {
+  return normalizer[k] || k
 }

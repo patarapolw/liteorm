@@ -123,12 +123,14 @@ export class Collection<T> extends Emittery.Typed<{
     }
 
     Object.entries(this.__meta.prop).map(([k, v]) => {
-      const { onUpdate } = v as any
+      if (v) {
+        const { onUpdate } = v as any
 
-      if (onUpdate) {
-        this.on('pre-update', async ({ set }) => {
-          (set as any)[k] = (set as any)[k] || (typeof onUpdate === 'function' ? await onUpdate(set) : v)
-        })
+        if (onUpdate) {
+          this.on('pre-update', async ({ set }) => {
+            (set as any)[k] = (set as any)[k] || (typeof onUpdate === 'function' ? await onUpdate(set) : v)
+          })
+        }
       }
     })
   }
