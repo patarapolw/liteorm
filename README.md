@@ -1,6 +1,6 @@
 # liteorm
 
-A simple wrapper for [sqlite](sqlite); with typings based on [TypeScript decorators](https://www.typescriptlang.org/docs/handbook/decorators.html) and [reflect-metadata](https://www.npmjs.com/package/reflect-metadata).
+A simple wrapper for [sqlite](https://www.npmjs.com/package/sqlite); with typings based on [TypeScript decorators](https://www.typescriptlang.org/docs/handbook/decorators.html) and [reflect-metadata](https://www.npmjs.com/package/reflect-metadata).
 
 [![npm version](https://badge.fury.io/js/liteorm.svg)](https://badge.fury.io/js/liteorm)
 
@@ -29,27 +29,28 @@ Joining (left and inner) is implemented through `chain()` method. The row name w
 
 ```sh
 npm i liteorm
+# or yarn add liteorm
 ```
 
 ## Caveats
 
 - Type `Number` by default is associated with `REAL`. To change it to `INTEGER`, use
 
-```typescript
+```ts
 @prop({type: 'int'}) count!: number;
 ```
 
 - `BLOB` is associated with Type `ArrayBuffer`.
 
-```typescript
+```ts
 @prop() data!: ArrayBuffer;
 ```
 
 - To get a strongly-typed `default` / `onUpdate`, you might have to declare typing twice.
 
-```typescript
-@prop<Record<string, any>>({ default: {} }) data!: Record<string, any>;
-@prop<number, EntryClass>({ onUpdate: (ent) => parseToInt(ent) }) order!: number;
+```ts
+@prop<Record<string, string>>({ default: () => ({}) }) data!: Record<string, string>;
+@prop<number, EntryClass>({ default: 1, onUpdate: (ent) => parseToInt(ent) }) order!: number;
 ```
 
-- You might have to declare your own interface to get keys for `_id`, `createdAt`, `updatedAt`
+- You might have to declare your own interface to get keys for `_id`, `createdAt`, `updatedAt`, because typing is based directly on Class.
