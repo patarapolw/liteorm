@@ -6,6 +6,7 @@ A simple wrapper for [sqlite](sqlite); with typings based on [TypeScript decorat
 
 - Async eventemitter ([emittery](https://www.npmjs.com/package/emittery)).
 - Auto-define `_id` as `PRIMARY KEY INTEGER AUTOINCREMENT` (Use `_id` as default name for primary key.)
+- Auto-append `createdAt`, `updatedAt` if `@Table({ timestamp: true })`
 - JSON, Date, and MongoDB interop.
 - Query with JSON, and tested with <https://q2search.herokuapp.com/LiteORM>, using MongoDB-like languages, with some differences (for example, `$regex` is currently not supported, use `$like`, `$nlike`, `$substr`, `$nsubstr` instead.)
 - JSON querying is supported via JSON1 extension. I made it easy to query using dot notation, just like MongoDB.
@@ -32,10 +33,10 @@ npm i liteorm
 
 ## Caveats
 
-- Type `Number` by default is associated with `INTEGER`. To change it to `REAL` (float), use
+- Type `Number` by default is associated with `REAL`. To change it to `INTEGER`, use
 
 ```typescript
-@prop({type: 'REAL'}) f!: number;
+@prop({type: 'int'}) count!: number;
 ```
 
 - `BLOB` is associated with Type `ArrayBuffer`.
@@ -43,3 +44,12 @@ npm i liteorm
 ```typescript
 @prop() data!: ArrayBuffer;
 ```
+
+- To get a strongly-typed `default` / `onUpdate`, you might have to declare typing twice.
+
+```typescript
+@prop<Record<string, any>>({ default: {} }) data!: Record<string, any>;
+@prop<number, EntryClass>({ onUpdate: (ent) => parseToInt(ent) }) order!: number;
+```
+
+- You might have to declare your own interface to get keys for `_id`, `createdAt`, `updatedAt`
