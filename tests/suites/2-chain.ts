@@ -1,3 +1,5 @@
+import assert from 'assert'
+
 import { db } from './0-create'
 
 export default () => describe('chainDatabase', () => {
@@ -16,7 +18,7 @@ export default () => describe('chainDatabase', () => {
       const chained = db.cols.card.chain(['noteId', 'front', 'stat', 'nextReview'])
       // chained.on('data', (sql) => console.log(sql))
 
-      console.dir(await chained
+      const r = await chained
         .join(db.cols.note, 'noteId', '_id', ['data'])
         .data(cond, {
           sort: {
@@ -25,7 +27,9 @@ export default () => describe('chainDatabase', () => {
           },
           offset: 10,
           limit: 5,
-        }), { depth: null })
+        })
+
+      assert(r.length > 0)
     })
   })
 })

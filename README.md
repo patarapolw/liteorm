@@ -7,7 +7,8 @@ A simple wrapper for [sqlite](https://www.npmjs.com/package/sqlite); with typing
 - Async eventemitter ([emittery](https://www.npmjs.com/package/emittery)).
 - Auto-define `_id` as `PRIMARY KEY INTEGER AUTOINCREMENT` (Use `_id` as default name for primary key.)
 - Auto-append `createdAt`, `updatedAt` if `@Table({ timestamp: true })`
-- JSON, Date, and MongoDB interop.
+- JSON, Date, Boolean, and MongoDB interop
+- Additional type `StringArray`, inspired by [Anki schema](https://github.com/ankidroid/Anki-Android/wiki/Database-Structure)
 - Query with JSON, and tested with <https://q2search.herokuapp.com/LiteORM>, using MongoDB-like languages, with some differences (for example, `$regex` is currently not supported, use `$like`, `$nlike`, `$substr`, `$nsubstr` instead.)
 - JSON querying is supported via JSON1 extension. I made it easy to query using dot notation, just like MongoDB.
   - So, you can use `data.a`

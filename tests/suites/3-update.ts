@@ -1,3 +1,5 @@
+import assert from 'assert'
+
 import { db } from './0-create'
 
 export default () => describe('updateDatabase', () => {
@@ -13,15 +15,9 @@ export default () => describe('updateDatabase', () => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('update', console.log)
 
-      console.dir(await db.cols.card.update(cond, { front: 'NoNUM' }), { depth: null })
-      console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview'], {
-        sort: {
-          key: 'front',
-          desc: true,
-        },
-        offset: 10,
-        limit: 5,
-      }), { depth: null })
+      await db.cols.card.update(cond, { front: 'NoNUM' })
+      const r = await db.cols.card.find(cond, ['front'])
+      assert(r.every((r0) => r0.front === 'NoNUM'))
 
       // db.cols.card.off('update', console.log)
     })

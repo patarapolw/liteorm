@@ -1,3 +1,5 @@
+import assert from 'assert'
+
 import { db } from './0-create'
 
 export default () => describe('deleteDatabase', () => {
@@ -11,13 +13,9 @@ export default () => describe('deleteDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      console.dir(await db.cols.card.delete(cond), { depth: null })
-      console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview'], {
-        sort: {
-          key: 'front',
-          desc: true,
-        },
-      }), { depth: null })
+      await db.cols.card.delete(cond)
+      const r = await db.cols.card.find(cond, ['_id'])
+      assert(r.length === 0)
     })
   })
 })

@@ -162,7 +162,7 @@ export function safeColumnName (s: string) {
     .map((el) => el.trim())
     .filter((el) => el)
 
-  const kwRegex = new RegExp(`(^|[^A-Z])(${keywords.join('|')})($|[^A-Z])`, 'gi')
+  const kwRegex = new RegExp(`(^|[^A-Z_])(${keywords.join('|')})($|[^A-Z_])`, 'gi')
 
   return s.replace(kwRegex, '$1"$2"$3')
 }
@@ -171,7 +171,7 @@ export function safeColumnName (s: string) {
  * https://www.sqlite.org/datatype3.html
  */
 export type SqliteNative = 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB'
-export type SqliteExt = 'Boolean' | 'Date' | 'JSON' | 'StrArray'
+export type SqliteExt = 'Boolean' | 'Date' | 'JSON' | 'StringArray'
 export type SqliteAllTypes = SqliteNative | SqliteExt
 
 export const AliasToSqliteType = {
@@ -195,7 +195,7 @@ export const AliasToSqliteType = {
    * Additional aliases
    */
   JSON: 'TEXT',
-  StrArray: 'TEXT',
+  StringArray: 'TEXT',
   str: 'TEXT',
   string: 'TEXT',
   int: 'INTEGER',
@@ -228,7 +228,7 @@ export interface AliasToJSType extends Record<keyof typeof AliasToSqliteType, an
    * Additional aliases
    */
   JSON: Record<string, any> | any[]
-  StrArray: string[]
+  StringArray: string[]
   str: string // TEXT
   string: string // TEXT
   int: number // INTEGER
@@ -254,7 +254,7 @@ Object: Record<string, any> | any[] // JSON
  * Additional aliases
  */
 JSON: Record<string, any> | any[]
-StrArray: string[]
+StringArray: string[]
 str: string // TEXT
 string: string // TEXT
 int: number // INTEGER

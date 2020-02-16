@@ -33,6 +33,7 @@ class DbCard {
 
   @prop({ type: 'int', default: () => Math.random() * 1000 }) randomInt?: number
   @prop({ default: () => Math.random() }) randomFloat?: number
+  @prop({ type: 'StringArray', null: true }) v2b?: string[]
 }
 
 const dbCard = Collection.make(DbCard)
@@ -96,6 +97,10 @@ export async function createDatabase (filename: string = 'tests/test.db') {
           await db.cols.card.create({
             _id: nanoid(),
             isCool: faker.random.arrayElement([true, false]),
+            v2b: faker.random.number(5) === 0
+              ? undefined
+              : Array.from({ length: faker.random.number(5) })
+                .map(() => faker.random.arrayElement(['is', 'am', 'are', 'was', 'were'])),
             noteId,
             front: faker.lorem.sentences(),
             back: faker.random.number(5) === 0

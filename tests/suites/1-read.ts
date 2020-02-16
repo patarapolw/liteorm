@@ -8,6 +8,15 @@ export default () => describe('readDatabase', () => {
       front: { $substr: 'Lorem' },
     },
     {
+      v2b: 'is',
+    },
+    {
+      v2b: ['is', 'am'],
+    },
+    {
+      v2b: { $in: ['is', 'am'] },
+    },
+    {
       'stat.streak.right': { $gt: 8 },
     },
     {
@@ -16,16 +25,19 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
+      const count = await db.cols.card.find(cond, { 'COUNT(*)': 'count' })
+      assert(count[0].count > 0)
 
-      console.dir(await db.cols.card.find(cond, { 'COUNT(*)': 'count' }), { depth: null })
-      console.dir(await db.cols.card.find(cond, ['front', 'stat', 'nextReview', 'isCool'], {
-        sort: {
-          key: 'front',
-          desc: true,
-        },
-        offset: 10,
-        limit: 5,
-      }), { depth: null })
+      // const result = await db.cols.card.find(cond, ['front', 'stat', 'nextReview', 'isCool', 'v2b'], {
+      //   sort: {
+      //     key: 'front',
+      //     desc: true,
+      //   },
+      //   offset: 10,
+      //   limit: 5,
+      // })
+
+      // console.dir(result, { depth: null })
 
       // db.cols.card.off('find', console.log)
     })

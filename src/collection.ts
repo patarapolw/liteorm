@@ -10,6 +10,11 @@ interface ITransformer<T> {
   set: (data: T) => any
 }
 
+type ICollectionMeta<T> = {
+  fields: Array<keyof T | '_id'>
+  transform: Record<SqliteExt, ITransformer<any>>
+} & ISqliteMeta<T>
+
 export interface ISql {
   $statement: string
   $params: Record<string, any>
@@ -62,10 +67,7 @@ export class Collection<T> extends Emittery.Typed<{
     }
   }
 
-  __meta: {
-    fields: Array<keyof T | '_id'>
-    transform: Record<SqliteExt, ITransformer<any>>
-  } & ISqliteMeta<T>
+  __meta: ICollectionMeta<T>
 
   sql!: sqlite.Database
   name: string
@@ -109,8 +111,11 @@ export class Collection<T> extends Emittery.Typed<{
           get: (repr) => repr ? JSON.parse(repr) : null,
           set: (data) => data ? JSON.stringify(data) : null,
         },
-        StrArray: {
-          get: (repr) => repr ? repr.trim().split('\x1f') : null,
+        StringArray: {
+          get: (repr?: string) => (() => {
+            repr = repr ? repr.substr(1, repr.length - 2) : ''
+            return repr ? repr.split('\x1f') : null
+          })(),
           set: (d) => d ? '\x1f' + d.join('\x1f') + '\x1f' : null,
         },
         Boolean: {
@@ -315,7 +320,7 @@ export class Collection<T> extends Emittery.Typed<{
       offset?: number
       limit?: number
     } = {},
-  ): Promise<Partial<T>[]> {
+  ): Promise<any[]> {
     if (!fields) {
       fields = {}
     }
@@ -336,7 +341,9 @@ export class Collection<T> extends Emittery.Typed<{
 
     await this.emit('pre-find', { cond, fields, options: { postfix } })
 
-    const where = _parseCond(cond)
+    const where = _parseCond(cond, {
+      [this.name]: this,
+    })
 
     const selectClause: string[] = []
 
@@ -373,7 +380,7 @@ export class Collection<T> extends Emittery.Typed<{
   async get (
     cond: Record<string, any>,
     fields?: string[] | Record<string, string>,
-  ): Promise<Partial<T> | null> {
+  ): Promise<any | null> {
     return (await this.find(cond, fields, { limit: 1 }))[0] || null
   }
 
@@ -400,7 +407,9 @@ export class Collection<T> extends Emittery.Typed<{
 
     const setK: string[] = []
     const setV: Record<string, any> = {}
-    const where = _parseCond(cond)
+    const where = _parseCond(cond, {
+      [this.name]: this,
+    })
 
     for (let [k, v] of Object.entries<any>(set)) {
       const prop = (this.__meta.prop as any)[k]
@@ -454,7 +463,9 @@ export class Collection<T> extends Emittery.Typed<{
 
     await this.emit('pre-delete', { cond, options: { postfix } })
 
-    const where = _parseCond(cond)
+    const where = _parseCond(cond, {
+      [this.name]: this,
+    })
 
     const sql: ISql = {
       $statement: [
@@ -629,7 +640,7 @@ class Chain<T> extends Emittery.Typed<{
 
     await this.emit('pre-data', { cond, options: { postfix } })
 
-    const where = _parseCond(cond)
+    const where = _parseCond(cond, this.cols)
 
     const sql = {
       $statement: [
@@ -673,7 +684,7 @@ class Chain<T> extends Emittery.Typed<{
   }
 }
 
-function _parseCond (q: Record<string, any>): ISql {
+function _parseCond (q: Record<string, any>, cols: Record<string, Collection<any>>): ISql {
   if (q.$statement) {
     return {
       $statement: q.$statement,
@@ -686,7 +697,7 @@ function _parseCond (q: Record<string, any>): ISql {
 
   if (Array.isArray(q.$or)) {
     const c = q.$or.map((el) => {
-      const r = _parseCond(el)
+      const r = _parseCond(el, cols)
       Object.assign($params, r.$params)
 
       return r.$statement
@@ -695,7 +706,7 @@ function _parseCond (q: Record<string, any>): ISql {
     subClause.push(`(${c})`)
   } else if (Array.isArray(q.$and)) {
     const c = q.$and.map((el) => {
-      const r = _parseCond(el)
+      const r = _parseCond(el, cols)
       Object.assign($params, r.$params)
 
       return r.$statement
@@ -703,7 +714,7 @@ function _parseCond (q: Record<string, any>): ISql {
 
     subClause.push(`(${c})`)
   } else {
-    const r = _parseCondBasic(q)
+    const r = _parseCondBasic(q, cols)
 
     subClause.push(`(${r.$statement})`)
     Object.assign($params, r.$params)
@@ -715,7 +726,7 @@ function _parseCond (q: Record<string, any>): ISql {
   }
 }
 
-function _parseCondBasic (cond: Record<string, any>): ISql {
+function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Collection<any>>): ISql {
   if (cond.$statement) {
     return {
       $statement: cond.$statement,
@@ -726,16 +737,37 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
   const cList: string[] = []
   const $params: Record<string, any> = {}
 
+  function doDefault (k: string, v: any, id: string) {
+    if (strArrayCols.includes(k)) {
+      Object.assign($params, { [id]: v })
+      cList.push(`${k} LIKE '%\x1f'||${id}||'\x1f%'`)
+    } else {
+      Object.assign($params, { [id]: v })
+      cList.push(`${k} = ${id}`)
+    }
+  }
+
+  const strArrayCols = Object.values(cols).map((c) => {
+    const strArrayFields = Object.entries(c.__meta.prop)
+      .filter(([_, v]) => v && v.type === 'StringArray')
+      .map(([k]) => k)
+    return [
+      ...strArrayFields.map((f) => safeColumnName(f)),
+      ...strArrayFields.map((f) => `${c.name}__${f}`),
+    ]
+  }).reduce((prev, c) => [...prev, ...c], [])
+
   for (let [k, v] of Object.entries(cond)) {
+    let isPushed = false
     if (k.includes('.')) {
       const kn = k.split('.')
       k = `json_extract(${safeColumnName(kn[0])}, '$.${safeColumnName(kn.slice(1).join('.'))}')`
     } else {
       k = safeColumnName(k)
     }
+    const isStrArray = strArrayCols.includes(k)
 
     if (v instanceof Date) {
-      k = `json_extract(${k}, '$.$milli')`
       v = +v
     }
 
@@ -743,30 +775,51 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
 
     if (v) {
       if (Array.isArray(v)) {
-        if (v.length > 1) {
-          const vObj = v.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
-          cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
-          Object.assign($params, vObj)
-        } else if (v.length === 1) {
-          const id = `$${safeId()}`
-          cList.push(`${k} = ${id}`)
-          Object.assign($params, { [id]: v[0] })
+        if (isStrArray) {
+          cList.push(`(${(v.map((v0) => {
+            const id = `$${safeId()}`
+            Object.assign($params, { [id]: v0 })
+            return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
+          })).join(' AND ')})`)
+        } else {
+          if (v.length > 1) {
+            const vObj = v.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
+            cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
+            Object.assign($params, vObj)
+          } else if (v.length === 1) {
+            const id = `$${safeId()}`
+            cList.push(`${k} = ${id}`)
+            Object.assign($params, { [id]: v[0] })
+          }
         }
       } else if (typeof v === 'object' && v.toString() === '[object Object]') {
         const op = Object.keys(v)[0]
         let v1 = v[op]
+        if (v1 instanceof Date) {
+          v1 = +v1
+        }
+
         if (Array.isArray(v1)) {
           switch (op) {
             case '$in':
-              if (v1.length > 1) {
-                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
-                cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
-                Object.assign($params, vObj)
-              } else if (v1.length === 1) {
-                const id = `$${safeId()}`
-                cList.push(`${k} = ${id}`)
-                Object.assign($params, { [id]: v1[0] })
+              if (isStrArray) {
+                cList.push(`(${(v1.map((v0) => {
+                  const id = `$${safeId()}`
+                  Object.assign($params, { [id]: v0 })
+                  return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
+                })).join(' OR ')})`)
+              } else {
+                if (v1.length > 1) {
+                  const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
+                  cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
+                  Object.assign($params, vObj)
+                } else if (v1.length === 1) {
+                  const id = `$${safeId()}`
+                  cList.push(`${k} = ${id}`)
+                  Object.assign($params, { [id]: v1[0] })
+                }
               }
+              isPushed = true
               break
             case '$nin':
               if (v1.length > 1) {
@@ -778,9 +831,13 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
                 cList.push(`${k} != ${id}`)
                 Object.assign($params, { [id]: v1[0] })
               }
+              isPushed = true
               break
           }
-          v1 = JSON.stringify(v1)
+        }
+
+        if (isPushed) {
+          continue
         }
 
         if (v1 && typeof v1 === 'object') {
@@ -833,16 +890,13 @@ function _parseCondBasic (cond: Record<string, any>): ISql {
             Object.assign($params, { [id]: v1 })
             break
           default:
-            cList.push(`${k} = ${id}`)
-            Object.assign($params, { [id]: v1 })
+            doDefault(k, v, id)
         }
       } else {
-        cList.push(`${k} = ${id}`)
-        Object.assign($params, { [id]: v })
+        doDefault(k, v, id)
       }
     } else {
-      cList.push(`${k} = ${id}`)
-      Object.assign($params, { [id]: v })
+      doDefault(k, v, id)
     }
   }
 
