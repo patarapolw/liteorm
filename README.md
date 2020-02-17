@@ -56,4 +56,4 @@ npm i liteorm
 @prop<number, EntryClass>({ default: 1, onUpdate: (ent) => parseToInt(ent) }) order!: number;
 ```
 
-- You might have to declare your own interface to get keys for `_id`, `createdAt`, `updatedAt`, because typing is based directly on Class.
+- You might have to declare your own interface to get keys for `createdAt`, `updatedAt`, because typing is based directly on Class.
