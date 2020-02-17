@@ -6,7 +6,8 @@ A simple wrapper for [sqlite](https://www.npmjs.com/package/sqlite); with typing
 
 - Async eventemitter ([emittery](https://www.npmjs.com/package/emittery))
   - I make sure that you can intercept query objects and raw SQL (as well as their parameters) in an async way
-- Auto-define `_id` as `PRIMARY KEY INTEGER AUTOINCREMENT` (Use `_id` as default name for primary key)
+- ~~Auto-define `_id` as `PRIMARY KEY INTEGER AUTOINCREMENT` (Use `_id` as default name for primary key)~~
+  - I use ROWID, instead.
 - Auto-append `createdAt`, `updatedAt` if `@Table({ timestamp: true })`
 - JSON, Date, Boolean, and MongoDB interop
 - Additional type `StringArray`, inspired by [Anki schema](https://github.com/ankidroid/Anki-Android/wiki/Database-Structure)

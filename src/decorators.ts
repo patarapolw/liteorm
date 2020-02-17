@@ -58,15 +58,19 @@ export function prop<
     const references = typeof params.references === 'string'
       ? params.references
       : params.references instanceof Collection
-        ? `${params.references.name}(${String(params.references.__meta.primary.name)})`
+        ? `${params.references.name}(${
+          params.references.__meta.primary
+            ? String(params.references.__meta.primary.name)
+            : 'ROWID'
+        })`
         : typeof params.references === 'object'
           ? `${params.references.col.name}(${params.references.key})`
           : undefined
-    let type = typeof params.references === 'object'
+    let type = (typeof params.references === 'object'
       ? params.references instanceof Collection
-        ? params.references.__meta.primary.type
+        ? (params.references.__meta.primary || {}).type
         : (params.references.col.__meta.prop[params.references.key] || {}).type
-      : params.type || t.name
+      : params.type || t.name) || 'INTEGER'
 
     type = normalizeAlias(type)
 
@@ -115,11 +119,8 @@ export function Table<T> (params: {
     const { createdAt, updatedAt } = timestamp
 
     const name = params.name || target.constructor.name
-    const primary = Reflect.getMetadata('sqlite:primary', target.prototype) || (params.primary ? { name: params.primary } : {
-      name: '_id',
-      type: 'integer',
-      autoincrement: true,
-    })
+    const primary = Reflect.getMetadata('sqlite:primary', target.prototype) ||
+      (params.primary ? { name: params.primary } : undefined)
     const prop = Reflect.getMetadata('sqlite:prop', target.prototype)
     const unique = params.unique
 
@@ -156,7 +157,7 @@ export interface IPropRow<
 
 export interface ISqliteMeta<T> {
   name: string
-  primary: IPrimaryRow
+  primary?: IPrimaryRow
   prop: Partial<Record<keyof T, IPropRow>>
   unique?: (keyof T)[][]
   createdAt: boolean

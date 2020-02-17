@@ -19,7 +19,10 @@ export default () => describe('chainDatabase', () => {
       // chained.on('data', (sql) => console.log(sql))
 
       const r = await chained
-        .join(db.cols.note, 'noteId', '_id', ['data'])
+        .join(db.cols.note, {
+          col: db.cols.card,
+          key: 'noteId',
+        }, ['data'])
         .data(cond, {
           sort: {
             key: 'card__front',

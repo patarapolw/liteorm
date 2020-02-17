@@ -17,7 +17,7 @@ const dbNote = Collection.make(DbNote)
 
 @Table({ name: 'card', timestamp: true })
 class DbCard {
-  @primary() _id!: string
+  @primary({ default: () => nanoid() }) _id?: string
   @prop({ references: dbNote }) noteId!: any
   @prop() isCool!: boolean
   @prop() front!: string
@@ -95,7 +95,6 @@ export async function createDatabase (filename: string = 'tests/test.db') {
       await Promise.all(Array.from({ length: faker.random.number(3) }).map(async () => {
         try {
           await db.cols.card.create({
-            _id: nanoid(),
             isCool: faker.random.arrayElement([true, false]),
             v2b: faker.random.number(5) === 0
               ? undefined

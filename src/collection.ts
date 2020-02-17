@@ -11,7 +11,7 @@ interface ITransformer<T> {
 }
 
 type ICollectionMeta<T> = {
-  fields: Array<keyof T | '_id'>
+  fields: (keyof T)[]
   transform: Record<SqliteExt, ITransformer<any>>
 } & ISqliteMeta<T>
 
@@ -32,7 +32,7 @@ export class Collection<T> extends Emittery.Typed<{
   'pre-find': {
     cond: Record<string, any>
     /**
-     * Fields are mostly `keyof T`, but can also be functions, like `COUNT(_id)`
+     * Fields are mostly `keyof T`, but can also be functions, like `COUNT(*)`
      */
     fields: Record<string, string>
     options: {
@@ -77,8 +77,8 @@ export class Collection<T> extends Emittery.Typed<{
     const { name, primary, unique, prop, createdAt, updatedAt } = (model as any).__meta as ISqliteMeta<T>
 
     this.name = name
-    const fields: (keyof T | '_id')[] = []
-    if (primary.name) {
+    const fields: (keyof T)[] = []
+    if (primary && primary.name) {
       if (Array.isArray(primary.name)) {
         fields.push(...primary.name as any[])
       } else {
@@ -177,7 +177,7 @@ export class Collection<T> extends Emittery.Typed<{
 
     const col: string[] = []
 
-    if (this.__meta.primary.type) {
+    if (this.__meta.primary && this.__meta.primary.type) {
       col.push([
         safeColumnName(this.__meta.primary.name as string),
         AliasToSqliteType[this.__meta.primary.type as keyof typeof AliasToSqliteType] || 'INTEGER',
@@ -200,7 +200,7 @@ export class Collection<T> extends Emittery.Typed<{
       }
     }
 
-    if (Array.isArray(this.__meta.primary.name)) {
+    if (this.__meta.primary && Array.isArray(this.__meta.primary.name)) {
       col.push([
         'PRIMARY KEY',
         `(${this.__meta.primary.name.map((k) => safeColumnName(k as string)).join(',')})`,
@@ -305,7 +305,7 @@ export class Collection<T> extends Emittery.Typed<{
   /**
    *
    * @param cond Put in `{ $statement: string, $params: any[] }` to directly use SQL
-   * @param fields Put in empty array or `null` to select all fields. `COUNT(_id)` is also allowed.
+   * @param fields Put in empty array or `null` to select all fields. `COUNT(*)` is also allowed.
    * @param options
    */
   async find (
@@ -582,33 +582,43 @@ class Chain<T> extends Emittery.Typed<{
    * @param select
    * @param type
    */
-  join<U> (
-    to: Collection<U>,
-    foreignField: string | [string, string],
-    localField: keyof U | '_id' = '_id' as any,
+  join<U, K> (
+    to: Collection<U> | {
+      col: Collection<U>
+      key: keyof U | 'ROWID'
+    },
+    from: {
+      col: Collection<K>
+      key: keyof K
+    },
     select?: Array<keyof U> | Record<keyof U, string> | null,
     type?: 'left' | 'inner',
   ): this {
+    if (to instanceof Collection) {
+      to = {
+        col: to,
+        key: 'ROWID',
+      }
+    }
+
     if (select) {
       if (Array.isArray(select)) {
         for (const l of select) {
-          this.select[safeColumnName(`${to.name}.${l}`)] = safeColumnName(`${to.name}__${l}`)
+          this.select[safeColumnName(`${to.col.name}.${l}`)] = safeColumnName(`${to.col.name}__${l}`)
         }
       } else {
         for (const [l, v] of Object.entries<string>(select)) {
-          this.select[safeColumnName(`${to.name}.${l}`)] = v
+          this.select[safeColumnName(`${to.col.name}.${l}`)] = v
         }
       }
     }
 
-    if (Array.isArray(foreignField)) {
-      foreignField = foreignField.join('__')
-    }
+    const foreignField = `${from.col.name}__${from.key}`
 
     this.from.push(
-      `${type || ''} JOIN ${safeColumnName(to.name)}`,
-      `ON ${safeColumnName(foreignField)} = ${safeColumnName(to.name)}.${localField}`)
-    this.cols[to.name] = to
+      `${type || ''} JOIN ${safeColumnName(to.col.name)}`,
+      `ON ${safeColumnName(foreignField)} = ${safeColumnName(to.col.name)}.${to.key}`)
+    this.cols[to.col.name] = to.col
 
     this.emit('join', this)
 
