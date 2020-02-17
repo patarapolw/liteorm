@@ -19,7 +19,7 @@ export function primary<
     let type: keyof typeof AliasToSqliteType = params.type || t.name
     type = normalizeAlias(type)
 
-    const name = params.name || key as string || '_id'
+    const name = params.name || key as string
     const autoincrement = !!params.autoincrement && ['INTEGER', 'REAL'].includes(AliasToSqliteType[type])
     if (autoincrement) {
       type = 'int'
