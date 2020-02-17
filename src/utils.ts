@@ -162,7 +162,11 @@ export function safeColumnName (s: string) {
     .map((el) => el.trim())
     .filter((el) => el)
 
-  const kwRegex = new RegExp(`(^|[^A-Z_])(${keywords.join('|')})($|[^A-Z_])`, 'gi')
+  /**
+   * https://stackoverflow.com/questions/31788990/sqlite-what-are-the-restricted-characters-for-identifiers
+   */
+  const validIdToken = 'A-Z0-9_$:'
+  const kwRegex = new RegExp(`(^|[^${validIdToken}\\)])(${keywords.join('|')})($|[^${validIdToken}\\()])`, 'gi')
 
   return s.replace(kwRegex, '$1"$2"$3')
 }
