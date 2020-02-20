@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { Collection } from './collection'
+import { Table } from './table'
 import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias } from './utils'
 
 export function primary<
@@ -47,7 +47,7 @@ export function prop<
   index?: boolean
   unique?: boolean
   null?: boolean
-  references?: string | Collection<any> | { col: Collection<any>; key: string }
+  references?: string | Table<any> | { table: Table<any>; key: string }
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
 } = {}): PropertyDecorator {
@@ -57,19 +57,19 @@ export function prop<
     const name = params.name || key as string
     const references = typeof params.references === 'string'
       ? params.references
-      : params.references instanceof Collection
-        ? `${params.references.name}(${
+      : params.references instanceof Table
+        ? `${params.references.__meta.name}(${
           params.references.__meta.primary
             ? String(params.references.__meta.primary.name)
             : 'ROWID'
         })`
         : typeof params.references === 'object'
-          ? `${params.references.col.name}(${params.references.key})`
+          ? `${params.references.table.__meta.name}(${params.references.key})`
           : undefined
     let type = (typeof params.references === 'object'
-      ? params.references instanceof Collection
+      ? params.references instanceof Table
         ? (params.references.__meta.primary || {}).type
-        : (params.references.col.__meta.prop[params.references.key] || {}).type
+        : (params.references.table.__meta.prop[params.references.key] || {}).type
       : params.type || t.name) || 'INTEGER'
 
     type = normalizeAlias(type)
@@ -90,7 +90,7 @@ export function prop<
   }
 }
 
-export function Table<T> (params: {
+export function Entity<T> (params: {
   name?: string
   primary?: Array<keyof T>
   unique?: Array<keyof T>[]

@@ -18,15 +18,7 @@ A simple wrapper for [sqlite](https://www.npmjs.com/package/sqlite); with typing
 
 ## Usage
 
-For example, please see [/tests/suites](https://github.com/patarapolw/liteorm/tree/master/tests/suites)
-
-## Querying data
-
-To query, you have to supply condition `{ 'a.b': 'c' }`, and optional field selector `['a']` or `{ 'a': 'b' }` (`a AS b`). If no field is supplied, all fields will be selected.
-
-## Joining aka `chain()`
-
-Joining (left and inner) is implemented through `chain()` method. The row name will now be `table__row` (in order not to interfere with dot notation), which still support JSON and Date conversion.
+Please see [/tests/suites](https://github.com/patarapolw/liteorm/tree/master/tests/suites)
 
 ## Installation
 

@@ -15,17 +15,19 @@ export default () => describe('chainDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      const chained = db.cols.card.chain(['noteId', 'front', 'stat', 'nextReview'])
-      // chained.on('data', (sql) => console.log(sql))
-
-      const r = await chained
-        .join(db.cols.note, {
-          col: db.cols.card,
+      const r = await db.db.find(db.cols.note, {
+        from: {
+          table: db.cols.note,
+        },
+        to: {
+          table: db.cols.card,
           key: 'noteId',
-        }, ['data'])
-        .data(cond, {
+        },
+      })(
+        cond, ['front', 'stat', 'nextReview'], {
           sort: {
-            key: 'card__front',
+            table: db.cols.card,
+            key: 'front',
             desc: true,
           },
           offset: 10,

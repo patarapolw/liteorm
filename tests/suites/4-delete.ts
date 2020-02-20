@@ -13,8 +13,8 @@ export default () => describe('deleteDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      await db.cols.card.delete(cond)
-      const r = await db.cols.card.find(cond, ['ROWID'])
+      await db.db.delete(db.cols.card)(cond)
+      const r = await db.db.find(db.cols.card)(cond, ['ROWID'])
       assert(r.length === 0)
     })
   })

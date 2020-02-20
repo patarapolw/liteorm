@@ -24,6 +24,7 @@ module.exports = {
     'no-new': 0,
     'no-unused-vars': 0,
     'no-inner-declarations': 0,
+    // 'no-return-await': 0,
     'arrow-parens': ['error', 'always'],
     'quote-props': ['error', 'as-needed'],
     'comma-dangle': ['error', 'always-multiline'],
