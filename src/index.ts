@@ -1,3 +1,3 @@
-export * from './collection'
+export * from './table'
 export * from './decorators'
 export * from './db'

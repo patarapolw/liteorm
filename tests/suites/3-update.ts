@@ -15,8 +15,9 @@ export default () => describe('updateDatabase', () => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('update', console.log)
 
-      await db.cols.card.update(cond, { front: 'NoNUM' })
-      const r = await db.cols.card.find(cond, ['front'])
+      await db.db.update(db.cols.card)(cond, { front: 'NoNUM' })
+      const r = await db.db.find(db.cols.card)(cond, ['front'])
+
       assert(r.every((r0) => r0.front === 'NoNUM'))
 
       // db.cols.card.off('update', console.log)

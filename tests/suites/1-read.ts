@@ -25,7 +25,7 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const count = await db.cols.card.find(cond, { 'COUNT(*)': 'count' })
+      const count = await db.db.find(db.cols.card)(cond, [{ key: 'COUNT(*)', alias: 'count' }])
       assert(count[0].count > 0)
 
       // const result = await db.cols.card.find(cond, ['front', 'stat', 'nextReview', 'isCool', 'v2b'], {
@@ -49,7 +49,7 @@ export default () => describe('readDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      await db.cols.card.find(cond, null, { limit: 5 }).catch((err) => {
+      await db.db.find(db.cols.card)(cond, ['*'], { limit: 5 }).catch((err) => {
         assert(err, 'Error should be thrown.')
       })
     })
