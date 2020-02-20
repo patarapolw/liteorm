@@ -21,5 +21,5 @@ describe('CRUD', function () {
 
 after(async () => {
   await db.db.close()
-  fs.unlinkSync('tests/test.db')
+  // fs.unlinkSync('tests/test.db')
 })

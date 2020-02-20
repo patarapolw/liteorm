@@ -44,8 +44,8 @@ export function prop<
 > (params: {
   name?: string
   type?: TSql
-  index?: boolean
-  unique?: boolean
+  index?: string | boolean
+  unique?: string | boolean
   null?: boolean
   references?: string | Table<any> | { table: Table<any>; key: string }
   default?: T | ((entry: Entry) => T | Promise<T>)
@@ -78,9 +78,13 @@ export function prop<
 
     prop[name] = {
       type,
-      unique: params.unique ? params.unique : false,
+      unique: typeof params.unique === 'string'
+        ? params.unique
+        : params.unique ? name + '_unique_idx' : undefined,
       null: params.null ? params.null : false,
-      index: params.index ? params.index : false,
+      index: typeof params.index === 'string'
+        ? params.index
+        : params.index ? name + '_idx' : undefined,
       references,
       default: params.default ? params.default : undefined,
       onUpdate: params.onUpdate,
@@ -92,8 +96,15 @@ export function prop<
 
 export function Entity<T> (params: {
   name?: string
-  primary?: Array<keyof T>
-  unique?: Array<keyof T>[]
+  primary?: (keyof T)[]
+  index?: ((keyof T)[] | {
+    name: string
+    keys: (keyof T)[]
+  })[]
+  unique?: ((keyof T)[] | {
+    name: string
+    keys: (keyof T)[]
+  })[]
   timestamp?: boolean | {
     createdAt?: boolean
     updatedAt?: boolean
@@ -122,9 +133,20 @@ export function Entity<T> (params: {
     const primary = Reflect.getMetadata('sqlite:primary', target.prototype) ||
       (params.primary ? { name: params.primary } : undefined)
     const prop = Reflect.getMetadata('sqlite:prop', target.prototype)
-    const unique = params.unique
+    const unique = params.unique ? params.unique.map((u) => {
+      return Array.isArray(u) ? {
+        name: u.join('_') + '_idx',
+        keys: u,
+      } : u
+    }) : undefined
+    const index = params.index ? params.index.map((u) => {
+      return Array.isArray(u) ? {
+        name: u.join('_') + '_idx',
+        keys: u,
+      } : u
+    }) : undefined
 
-    const __meta: ISqliteMeta<T> = { name, primary, prop, unique, createdAt, updatedAt }
+    const __meta: ISqliteMeta<T> = { name, primary, prop, unique, index, createdAt, updatedAt }
     target.prototype.__meta = __meta
   }
 }
@@ -147,9 +169,9 @@ export interface IPropRow<
   TSql extends SqliteAllTypes = any
 > {
   type: TSql
-  unique: boolean
+  unique?: string
   null: boolean
-  index: boolean
+  index?: string
   references?: string
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
@@ -159,7 +181,14 @@ export interface ISqliteMeta<T> {
   name: string
   primary?: IPrimaryRow
   prop: Partial<Record<keyof T, IPropRow>>
-  unique?: (keyof T)[][]
+  unique?: {
+    name: string
+    keys: (keyof T)[]
+  }[]
+  index?: {
+    name: string
+    keys: (keyof T)[]
+  }[]
   createdAt: boolean
   updatedAt: boolean
 }

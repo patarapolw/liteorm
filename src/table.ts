@@ -113,7 +113,6 @@ export class Table<E = any> extends Emittery.Typed<{
         col.push([
           safeColumnName(k),
           AliasToSqliteType[v.type as keyof typeof AliasToSqliteType] || 'TEXT',
-          v.unique ? 'UNIQUE' : '',
           v.null ? '' : 'NOT NULL',
           getDefault(k, v),
           v.references ? `REFERENCES ${safeColumnName(v.references)}` : '',
@@ -132,9 +131,21 @@ export class Table<E = any> extends Emittery.Typed<{
       this.__meta.unique.forEach((ss) => {
         col.push([
           'UNIQUE',
-          `(${ss.map((k) => safeColumnName(k as string)).join(',')})`,
+          ss.name,
+          `(${ss.keys.map((k) => safeColumnName(k as string)).join(',')})`,
         ].join(' '))
       })
+    }
+
+    for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
+      if (v && v.unique) {
+        col.push([
+          'CONSTRAINT',
+          v.unique,
+          'UNIQUE',
+          `(${safeColumnName(k)})`,
+        ].join(' '))
+      }
     }
 
     const sql: ISql = {
@@ -149,12 +160,30 @@ export class Table<E = any> extends Emittery.Typed<{
     await this.emit('build-sql', sql)
     await db.exec(sql.$statement)
 
+    if (this.__meta.index) {
+      await Promise.all(this.__meta.index.map(async (idx) => {
+        const sql: ISql = {
+          $statement: [
+            'CREATE INDEX IF NOT EXISTS',
+            idx.name,
+            'ON',
+            `${safeColumnName(this.__meta.name)}`,
+            `(${idx.keys.map((k) => safeColumnName(String(k))).join(',')})`,
+          ].join(' '),
+          $params: [],
+        }
+
+        await this.emit('build-sql', sql)
+        await db.exec(sql.$statement)
+      }))
+    }
+
     for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
       if (v && v.index) {
         const sql: ISql = {
           $statement: [
             'CREATE INDEX IF NOT EXISTS',
-            `${k}__idx`,
+            v.index,
             'ON',
             `${safeColumnName(this.__meta.name)}`,
             `(${safeColumnName(k)})`,
