@@ -1,7 +1,7 @@
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
-import { ISqliteMeta, IPropRow } from './decorators'
+import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators'
 import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds } from './utils'
 
 export interface ISql {
@@ -19,7 +19,7 @@ export class Column<T = any, E = any> {
     public opts: {
       name: string
       table: Table<E>
-      prop: IPropRow<T>
+      prop?: IPropRow<T> | IPrimaryRow<T>
     },
   ) {}
 

@@ -15,9 +15,8 @@ export class Db extends Emittery.Typed<{
       to: Column | Table<any>
     }[]
     select: {
-      key: string | Column
-      alias?: string
-    }[]
+      [alias: string]: string | Column
+    } | '*'
     options: {
       postfix?: string
       sort?: {
@@ -72,10 +71,9 @@ export class Db extends Emittery.Typed<{
       } : Record<string, any>[]
     >(
       cond: Record<string, any>,
-      select: (string | Column | {
-        key: string | Column
-        alias?: string
-      })[],
+      select: {
+        [alias: string]: string | Column
+      } | '*',
       options: {
         postfix?: string
         sort?: {
@@ -87,27 +85,28 @@ export class Db extends Emittery.Typed<{
       } = {},
       sqlOnly?: SqlOnly,
     ): Promise<R> => {
-      const selectArray = select.map((s) => (typeof s === 'string' || s instanceof Column) ? { key: s } : s)
       const tablesArray = tables.map((t) => t instanceof Table ? { to: t } : t)
 
       await this.emit('pre-find', {
         cond,
-        select: selectArray,
+        select,
         tables: tablesArray,
         options: options || {},
       })
 
-      const selectDict = selectArray.map(({ key, alias }) => {
-        const k = key instanceof Column ? `${key.tableName}.${key.columnName}` : key
-        const a = alias || (key instanceof Column ? `${key.tableName}__${key.columnName}` : key)
-        return [a, {
-          key: k,
-          column: key instanceof Column ? key : undefined,
-        }]
-      }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
-        key: string
-        column?: Column
-      }>)
+      const selectDict = (select && typeof select === 'object')
+        ? Object.entries(select).map(([alias, key]) => {
+          const k = key instanceof Column ? `${key.tableName}.${key.columnName}` : key
+          const a = alias || (key instanceof Column ? `${key.tableName}__${key.columnName}` : key)
+          return [a, {
+            key: k,
+            column: key instanceof Column ? key : undefined,
+          }]
+        }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
+          key: string
+          column?: Column
+        }>)
+        : null
 
       const tableRecord: Record<string, Table<any>> = [
         table0,
@@ -133,9 +132,9 @@ export class Db extends Emittery.Typed<{
 
       const sql = {
         $statement: [
-          `SELECT ${Object.entries(selectDict).map(([a, k]) => {
+          `SELECT ${selectDict ? Object.entries(selectDict).map(([a, k]) => {
             return k.key === a ? safeColumnName(k.key) : `${safeColumnName(k.key)} AS ${safeColumnName(a)}`
-          }).join(',')}`,
+          }).join(',') : select}`,
           `FROM ${safeColumnName(table0.__meta.name)}`,
           ...tablesArray.map((t) => {
             const toTable = t.to instanceof Table ? t.to : t.to.opts.table
@@ -169,7 +168,7 @@ export class Db extends Emittery.Typed<{
       const rs = await this.sql.all(sql.$statement, sql.$params) as any[]
       rs.map((r) => {
         return Object.entries(r).map(([alias, v]) => {
-          if (selectDict[alias] && selectDict[alias].column) {
+          if (selectDict && selectDict[alias] && selectDict[alias].column) {
             const col = selectDict[alias].column!
             r[alias] = col.opts.table.__transform(col.columnName, 'get')(v)
           }
@@ -206,12 +205,14 @@ export class Db extends Emittery.Typed<{
       ]
 
       return Promise.all(tt.map(async (t) => {
-        const select = {
-          key: t.__primaryKey,
-          alias: `${t.__meta.name}__$$id`,
-        }
         return {
-          ...(await this.find(table0, ...tables)(cond, [select], options, true)),
+          ...(await this.find(table0, ...tables)(cond, {
+            [`${t.__meta.name}__id`]: new Column({
+              name: t.__primaryKey,
+              table: t,
+              prop: t.__meta.primary,
+            }),
+          }, options, true)),
           table: t,
         }
       }))

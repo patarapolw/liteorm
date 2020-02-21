@@ -19,14 +19,21 @@ export default () => describe('chainDatabase', () => {
         from: dbCard.c.noteId,
         to: dbNote,
       })(
-        cond, [dbCard.c.front, dbCard.c.stat, dbCard.c.nextReview], {
+        cond,
+        {
+          front: dbCard.c.front,
+          stat: dbCard.c.stat,
+          nextReview: dbCard.c.nextReview,
+        },
+        {
           sort: {
             key: dbCard.c.front,
             desc: true,
           },
           offset: 10,
           limit: 5,
-        })
+        },
+      )
 
       assert(r.length > 0)
     })
