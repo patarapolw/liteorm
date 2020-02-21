@@ -1,5 +1,6 @@
 import { Table, ISql } from './table'
 import { safeColumnName, SafeIds } from './utils'
+import { IPropRow } from './decorators'
 
 /**
  *
@@ -79,12 +80,12 @@ function _parseCondBasic (
   }
 
   const strArrayCols = Object.values(cols).map((c) => {
-    const strArrayFields = Object.entries(c.__meta.prop)
+    const strArrayFields = Object.entries<IPropRow>(c.m.__meta.prop)
       .filter(([_, v]) => v && v.type === 'StringArray')
       .map(([k]) => k)
     return [
       ...strArrayFields.map((f) => safeColumnName(f)),
-      ...strArrayFields.map((f) => `${c.__meta.name}__${f}`),
+      ...strArrayFields.map((f) => `${c.m.__meta.name}__${f}`),
     ]
   }).reduce((prev, c) => [...prev, ...c], [])
 

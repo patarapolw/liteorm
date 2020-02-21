@@ -24,10 +24,10 @@ export class Column<T = any, E = any> {
   ) {}
 
   get tableName () {
-    return this.opts.table.__meta.name
+    return this.opts.table.m.__meta.name
   }
 
-  get columnName () {
+  get name () {
     return this.opts.name
   }
 }
@@ -51,34 +51,41 @@ export class Table<E = any> extends Emittery.Typed<{
   }
   'delete-sql': ISql
 }> {
-  __meta: ISqliteMeta<E>
-  c!: Required<{
+  c: Required<{
     [K in keyof E]: Column<E[K], E>
   }>
 
-  get __primaryKey () {
-    return this.__meta.primary && typeof this.__meta.primary.name === 'string' ? this.__meta.primary.name : 'ROWID'
+  m: E & {
+    __meta: ISqliteMeta<E>
+  }
+
+  get primaryKey () {
+    return this.m.__meta.primary && typeof this.m.__meta.primary.name === 'string' ? this.m.__meta.primary.name : 'ROWID'
+  }
+
+  get name () {
+    return this.m.__meta.name
   }
 
   constructor (M: { new(): E }) {
     super()
-    this.__meta = (new M() as any).__meta as ISqliteMeta<E>
+    this.m = new M() as any
 
     /**
      * __meta is being injected by `@Table`
      */
-    this.__meta.prop = {
-      createdAt: this.__meta.createdAt ? { type: 'Date', null: false, default: () => new Date() } : undefined,
-      updatedAt: this.__meta.updatedAt ? {
+    this.m.__meta.prop = {
+      createdAt: this.m.__meta.createdAt ? { type: 'Date', null: false, default: () => new Date() } : undefined,
+      updatedAt: this.m.__meta.updatedAt ? {
         type: 'Date',
         null: false,
         default: () => new Date(),
         onUpdate: () => new Date(),
       } : undefined,
-      ...this.__meta.prop,
+      ...this.m.__meta.prop,
     }
 
-    this.c = Object.entries(this.__meta.prop).map(([k, v]) => {
+    this.c = Object.entries(this.m.__meta.prop).map(([k, v]) => {
       return [k, new Column({
         name: k,
         table: this,
@@ -86,7 +93,7 @@ export class Table<E = any> extends Emittery.Typed<{
       })]
     }).reduce((prev, [k, v]: any[]) => ({ ...prev, [k]: v }), {}) as any
 
-    Object.entries(this.__meta.prop).map(([k, v]) => {
+    Object.entries(this.m.__meta.prop).map(([k, v]) => {
       if (v) {
         const { onUpdate } = v as any
 
@@ -104,7 +111,7 @@ export class Table<E = any> extends Emittery.Typed<{
       default?: any
       type?: keyof typeof AliasToSqliteType
     }) => {
-      const def = !['undefined', 'function'].includes(typeof v.default) ? this.__transform(k, 'set')(v.default) : v.default
+      const def = !['undefined', 'function'].includes(typeof v.default) ? this.transform(k, 'set')(v.default) : v.default
 
       if (typeof def === 'undefined') {
         return ''
@@ -126,17 +133,17 @@ export class Table<E = any> extends Emittery.Typed<{
 
     const col: string[] = []
 
-    if (this.__meta.primary && this.__meta.primary.type) {
+    if (this.m.__meta.primary && this.m.__meta.primary.type) {
       col.push([
-        safeColumnName(this.__meta.primary.name as string),
-        AliasToSqliteType[this.__meta.primary.type as keyof typeof AliasToSqliteType] || 'INTEGER',
+        safeColumnName(this.m.__meta.primary.name as string),
+        AliasToSqliteType[this.m.__meta.primary.type as keyof typeof AliasToSqliteType] || 'INTEGER',
         'PRIMARY KEY',
-        this.__meta.primary.autoincrement ? 'AUTOINCREMENT' : '',
-        getDefault(this.__meta.primary.name as string, this.__meta.primary),
+        this.m.__meta.primary.autoincrement ? 'AUTOINCREMENT' : '',
+        getDefault(this.m.__meta.primary.name as string, this.m.__meta.primary),
       ].join(' '))
     }
 
-    for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
+    for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.type) {
         col.push([
           safeColumnName(k),
@@ -148,15 +155,15 @@ export class Table<E = any> extends Emittery.Typed<{
       }
     }
 
-    if (this.__meta.primary && Array.isArray(this.__meta.primary.name)) {
+    if (this.m.__meta.primary && Array.isArray(this.m.__meta.primary.name)) {
       col.push([
         'PRIMARY KEY',
-        `(${this.__meta.primary.name.map((k) => safeColumnName(k as string)).join(',')})`,
+        `(${this.m.__meta.primary.name.map((k) => safeColumnName(k as string)).join(',')})`,
       ].join(' '))
     }
 
-    if (this.__meta.unique && this.__meta.unique.length > 0) {
-      this.__meta.unique.forEach((ss) => {
+    if (this.m.__meta.unique && this.m.__meta.unique.length > 0) {
+      this.m.__meta.unique.forEach((ss) => {
         col.push([
           'UNIQUE',
           ss.name,
@@ -165,7 +172,7 @@ export class Table<E = any> extends Emittery.Typed<{
       })
     }
 
-    for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
+    for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.unique) {
         col.push([
           'CONSTRAINT',
@@ -179,7 +186,7 @@ export class Table<E = any> extends Emittery.Typed<{
     const sql: ISql = {
       $statement: [
         'CREATE TABLE IF NOT EXISTS',
-        safeColumnName(this.__meta.name),
+        safeColumnName(this.m.__meta.name),
         `(${col.join(',')})`,
       ].join(' '),
       $params: [],
@@ -188,14 +195,14 @@ export class Table<E = any> extends Emittery.Typed<{
     await this.emit('build-sql', sql)
     await db.exec(sql.$statement)
 
-    if (this.__meta.index) {
-      await Promise.all(this.__meta.index.map(async (idx) => {
+    if (this.m.__meta.index) {
+      await Promise.all(this.m.__meta.index.map(async (idx) => {
         const sql: ISql = {
           $statement: [
             'CREATE INDEX IF NOT EXISTS',
             idx.name,
             'ON',
-            `${safeColumnName(this.__meta.name)}`,
+            `${safeColumnName(this.m.__meta.name)}`,
             `(${idx.keys.map((k) => safeColumnName(String(k))).join(',')})`,
           ].join(' '),
           $params: [],
@@ -206,14 +213,14 @@ export class Table<E = any> extends Emittery.Typed<{
       }))
     }
 
-    for (const [k, v] of Object.entries<IPropRow>(this.__meta.prop as any)) {
+    for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.index) {
         const sql: ISql = {
           $statement: [
             'CREATE INDEX IF NOT EXISTS',
             v.index,
             'ON',
-            `${safeColumnName(this.__meta.name)}`,
+            `${safeColumnName(this.m.__meta.name)}`,
             `(${safeColumnName(k)})`,
           ].join(' '),
           $params: [],
@@ -225,7 +232,7 @@ export class Table<E = any> extends Emittery.Typed<{
     }
   }
 
-  __create (db: sqlite.Database): (
+  create (db: sqlite.Database): (
     entry: E,
     options?: {
       postfix?: string
@@ -247,14 +254,14 @@ export class Table<E = any> extends Emittery.Typed<{
       const values: Record<string, any> = {}
 
       for (let [k, v] of Object.entries(entry)) {
-        v = this.__transform(k, 'set')(v)
+        v = this.transform(k, 'set')(v)
         bracketed.push(k)
         Object.assign(values, { [bindings.pop()]: v })
       }
 
       const sql = {
         $statement: [
-          `INSERT INTO ${safeColumnName(this.__meta.name)}`,
+          `INSERT INTO ${safeColumnName(this.m.__meta.name)}`,
           `(${bracketed.map(safeColumnName).join(',')})`,
           `VALUES (${Object.keys(values).join(',')})`,
           ...postfix,
@@ -281,7 +288,7 @@ export class Table<E = any> extends Emittery.Typed<{
       const setV: Record<string, any> = {}
 
       for (let [k, v] of Object.entries<any>(set)) {
-        v = this.__transform(k, 'set')(v)
+        v = this.transform(k, 'set')(v)
         const id = bindings.pop()
         setK.push(`${k} = ${id}`)
         setV[id] = v
@@ -289,9 +296,9 @@ export class Table<E = any> extends Emittery.Typed<{
 
       sql = {
         $statement: [
-          `UPDATE ${safeColumnName(this.__meta.name)}`,
+          `UPDATE ${safeColumnName(this.name)}`,
           `SET ${setK.map(safeColumnName).join(',')}`,
-          `WHERE ${safeColumnName(this.__primaryKey)}`,
+          `WHERE ${safeColumnName(this.primaryKey)}`,
           'IN',
           `(${sql.$statement})`,
         ].join(' '),
@@ -312,8 +319,8 @@ export class Table<E = any> extends Emittery.Typed<{
 
       sql = {
         $statement: [
-          `DELETE FROM ${safeColumnName(this.__meta.name)}`,
-          `WHERE ${safeColumnName(this.__primaryKey)}`,
+          `DELETE FROM ${safeColumnName(this.name)}`,
+          `WHERE ${safeColumnName(this.primaryKey)}`,
           'IN',
           `(${sql.$statement})`,
         ].join(' '),
@@ -325,10 +332,15 @@ export class Table<E = any> extends Emittery.Typed<{
     }
   }
 
-  __transform (k: string, method: 'get' | 'set' = 'set') {
+  /**
+   * @internal
+   * @param k
+   * @param method
+   */
+  transform (k: string, method: 'get' | 'set' = 'set') {
     let fn: ((a: any) => any) | null = null
 
-    const prop = (this.__meta.prop as any)[k] as IPropRow<any>
+    const prop = (this.m.__meta.prop as any)[k] as IPropRow<any>
     if (prop) {
       if (prop.transform) {
         fn = prop.transform[method] || null

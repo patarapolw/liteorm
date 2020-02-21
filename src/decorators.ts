@@ -59,18 +59,18 @@ export function prop<
     const references = typeof params.references === 'string'
       ? params.references
       : params.references instanceof Table
-        ? `${params.references.__meta.name}(${
-          params.references.__meta.primary
-            ? String(params.references.__meta.primary.name)
+        ? `${params.references.m.__meta.name}(${
+          params.references.m.__meta.primary
+            ? String(params.references.m.__meta.primary.name)
             : 'ROWID'
         })`
         : typeof params.references === 'object'
-          ? `${params.references.table.__meta.name}(${params.references.key})`
+          ? `${params.references.table.m.__meta.name}(${params.references.key})`
           : undefined
     let type = (typeof params.references === 'object'
       ? params.references instanceof Table
-        ? (params.references.__meta.primary || {}).type
-        : (params.references.table.__meta.prop[params.references.key] || {}).type
+        ? (params.references.m.__meta.primary || {}).type
+        : (params.references.table.m.__meta.prop[params.references.key] || {}).type
       : params.type || t.name) || 'INTEGER'
 
     type = normalizeAlias(type)
