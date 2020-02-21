@@ -12,6 +12,7 @@ export class Db extends Emittery.Typed<{
     tables: {
       type?: 'inner' | 'left' | 'cross' | 'natural'
       from?: Column
+      cond?: string
       to: Column | Table<any>
     }[]
     select: {
@@ -59,6 +60,7 @@ export class Db extends Emittery.Typed<{
   find (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
+    cond?: string
     to: Column | Table<any>
   })[]) {
     const bindings = new SafeIds()
@@ -70,7 +72,7 @@ export class Db extends Emittery.Typed<{
         bindings: SafeIds
       } : Record<string, any>[]
     >(
-      cond: Record<string, any>,
+      qCond: Record<string, any>,
       select: {
         [alias: string]: string | Column
       } | '*',
@@ -91,7 +93,7 @@ export class Db extends Emittery.Typed<{
       }
 
       await this.emit('pre-find', {
-        cond,
+        cond: qCond,
         select,
         tables: tablesArray,
         options: options || {},
@@ -118,7 +120,7 @@ export class Db extends Emittery.Typed<{
           : t.to instanceof Table ? t.to : t.to.opts.table),
       ].reduce((prev, t) => ({ ...prev, [t.m.__meta.name]: t }), {})
 
-      const where = parseCond(cond, tableRecord, bindings)
+      const where = parseCond(qCond, tableRecord, bindings)
 
       const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
@@ -151,6 +153,12 @@ export class Db extends Emittery.Typed<{
                 safeColumnName(t.to instanceof Table
                   ? `${toTable.m.__meta.name}.${toTable.primaryKey}`
                   : `${toTable.m.__meta.name}.${t.to.name}`),
+              ].join(' ')
+            } else if (t.cond) {
+              return [
+                `${t.type || 'INNER'} JOIN ${safeColumnName(toTable.m.__meta.name)}`,
+                'ON',
+                t.cond,
               ].join(' ')
             } else {
               return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.m.__meta.name)}`
@@ -185,10 +193,11 @@ export class Db extends Emittery.Typed<{
   findIds (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
+    cond?: string
     to: Column | Table<any>
   })[]) {
     return async (
-      cond: Record<string, any>,
+      qCond: Record<string, any>,
       options: {
         postfix?: string
         sort?: {
@@ -209,7 +218,7 @@ export class Db extends Emittery.Typed<{
 
       return Promise.all(tt.map(async (t) => {
         return {
-          ...(await this.find(table0, ...tables)(cond, {
+          ...(await this.find(table0, ...tables)(qCond, {
             [`${t.m.__meta.name}__id`]: new Column({
               name: t.primaryKey,
               table: t,
@@ -225,10 +234,11 @@ export class Db extends Emittery.Typed<{
   update (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
+    cond?: string
     to: Column | Table<any>
   })[]) {
     return async (
-      cond: Record<string, any>,
+      qCond: Record<string, any>,
       set: Record<string, any> | {
         table: Table<any>
         set: Record<string, any>
@@ -243,7 +253,7 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      await Promise.all((await this.findIds(table0, ...tables)(cond, options)).map(async ({ sql, bindings, table }) => {
+      await Promise.all((await this.findIds(table0, ...tables)(qCond, options)).map(async ({ sql, bindings, table }) => {
         if (Array.isArray(set)) {
           await Promise.all(set.filter((s) => s.table === table).map(async (s) => {
             await table.__updateBySql(this.sql)(sql, s.set, bindings)
@@ -258,10 +268,11 @@ export class Db extends Emittery.Typed<{
   delete (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
+    cond?: string
     to: Column | Table<any>
   })[]) {
     return async (
-      cond: Record<string, any>,
+      qCond: Record<string, any>,
       options: {
         postfix?: string
         sort?: {
@@ -272,7 +283,7 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      await Promise.all((await this.findIds(table0, ...tables)(cond, options)).map(async ({ sql, table }) => {
+      await Promise.all((await this.findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
         await table.__deleteBySql(this.sql)(sql)
       }))
     }
