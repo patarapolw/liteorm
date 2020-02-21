@@ -14,11 +14,11 @@ export interface ITransformer<T> {
   set: (data: T) => any
 }
 
-export class Column<T = any, E = any> {
+export class Column<T = any> {
   constructor (
     public opts: {
       name: string
-      table: Table<E>
+      table: Table<any>
       prop?: IPropRow<T> | IPrimaryRow<T>
     },
   ) {}
@@ -32,7 +32,11 @@ export class Column<T = any, E = any> {
   }
 }
 
-export class Table<E = any> extends Emittery.Typed<{
+export class Table<
+  M = any,
+  AdditionalProps extends { ROWID?: number; createdAt?: Date; updatedAt?: Date } = {},
+  E extends M & AdditionalProps = M & AdditionalProps
+> extends Emittery.Typed<{
   'build-sql': ISql
   'pre-create': {
     entry: E
@@ -52,7 +56,7 @@ export class Table<E = any> extends Emittery.Typed<{
   'delete-sql': ISql
 }> {
   c: Required<{
-    [K in keyof E]: Column<E[K], E>
+    [K in keyof E]: Column<E[K]>
   }>
 
   m: E & {
@@ -67,7 +71,7 @@ export class Table<E = any> extends Emittery.Typed<{
     return this.m.__meta.name
   }
 
-  constructor (M: { new(): E }) {
+  constructor (M: { new(): M }) {
     super()
     this.m = new M() as any
 
