@@ -13,7 +13,7 @@ class DbNote {
   @prop() order!: Record<string, number>
 }
 
-const dbNote = new Table(DbNote)
+export const dbNote = new Table(DbNote)
 
 @Entity({ name: 'card', timestamp: true })
 class DbCard {
@@ -36,7 +36,7 @@ class DbCard {
   @prop({ type: 'StringArray', null: true }) v2b?: string[]
 }
 
-const dbCard = new Table(DbCard)
+export const dbCard = new Table(DbCard)
 
 @Entity({ name: 'media', timestamp: true })
 class DbMedia {
@@ -44,22 +44,14 @@ class DbMedia {
   @prop() data!: ArrayBuffer
 }
 
-const dbMedia = new Table(DbMedia)
+export const dbMedia = new Table(DbMedia)
+
+let _db: Db
 
 export async function initDatabase (filename: string = 'tests/test.db') {
   const db = await Db.connect(filename)
   await db.init([dbNote, dbCard, dbMedia])
-
-  _db = {
-    db,
-    cols: {
-      note: dbNote,
-      media: dbMedia,
-      card: dbCard,
-    },
-  }
-
-  return _db
+  _db = db
 }
 
 export async function createDatabase (filename: string = 'tests/test.db') {
@@ -67,11 +59,11 @@ export async function createDatabase (filename: string = 'tests/test.db') {
     fs.unlinkSync(filename)
   }
 
-  const db = await initDatabase(filename)
+  await initDatabase(filename)
 
   await Promise.all(Array.from({ length: 1000 }).map(async () => {
     try {
-      await db.db.create(dbMedia)({
+      await _db.create(dbMedia)({
         name: faker.system.fileName(undefined, 'image'),
         data: crypto.randomBytes(256),
       })
@@ -88,7 +80,7 @@ export async function createDatabase (filename: string = 'tests/test.db') {
         .map(() => [faker.hacker.noun(), faker.hacker.phrase()])
         .reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {})
 
-      const noteId = await db.db.create(dbNote)({
+      const noteId = await _db.create(dbNote)({
         key: ids.pop(),
         data,
         order: Object.keys(data).map((k, i) => [k, i]).reduce((prev, [k, i]) => ({ ...prev, [k]: i }), {}),
@@ -96,7 +88,7 @@ export async function createDatabase (filename: string = 'tests/test.db') {
 
       await Promise.all(Array.from({ length: faker.random.number(3) }).map(async () => {
         try {
-          await db.db.create(dbCard)({
+          await _db.create(dbCard)({
             _id: ids.pop(),
             isCool: faker.random.arrayElement([true, false]),
             v2b: faker.random.number(5) === 0
@@ -128,19 +120,6 @@ export async function createDatabase (filename: string = 'tests/test.db') {
       console.error(e)
     }
   }))
-
-  _db = db
-
-  return _db
-}
-
-let _db: {
-  db: Db
-  cols: {
-    note: Table<DbNote>
-    media: Table<DbMedia>
-    card: Table<DbCard>
-  }
 }
 
 export { _db as db }

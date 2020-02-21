@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { db } from './0-create'
+import { db, dbCard } from './0-create'
 
 export default () => describe('deleteDatabase', () => {
   ;[
@@ -13,8 +13,8 @@ export default () => describe('deleteDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      await db.db.delete(db.cols.card)(cond)
-      const r = await db.db.find(db.cols.card)(cond, ['ROWID'])
+      await db.delete(dbCard)(cond)
+      const r = await db.find(dbCard)(cond, ['ROWID'])
       assert(r.length === 0)
     })
   })

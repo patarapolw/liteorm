@@ -20,6 +20,6 @@ describe('CRUD', function () {
 })
 
 after(async () => {
-  await db.db.close()
+  await db.close()
   fs.unlinkSync('tests/test.db')
 })

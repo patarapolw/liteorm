@@ -9,9 +9,27 @@ export interface ISql {
   $params: Record<string, any>
 }
 
-interface ITransformer<T> {
+export interface ITransformer<T> {
   get: (repr: any) => T | null
   set: (data: T) => any
+}
+
+export class Column<T = any, E = any> {
+  constructor (
+    public opts: {
+      name: string
+      table: Table<E>
+      prop: IPropRow<T>
+    },
+  ) {}
+
+  get tableName () {
+    return this.opts.table.__meta.name
+  }
+
+  get columnName () {
+    return this.opts.name
+  }
 }
 
 export class Table<E = any> extends Emittery.Typed<{
@@ -34,6 +52,9 @@ export class Table<E = any> extends Emittery.Typed<{
   'delete-sql': ISql
 }> {
   __meta: ISqliteMeta<E>
+  c!: Required<{
+    [K in keyof E]: Column<E[K], E>
+  }>
 
   get __primaryKey () {
     return this.__meta.primary && typeof this.__meta.primary.name === 'string' ? this.__meta.primary.name : 'ROWID'
@@ -57,6 +78,14 @@ export class Table<E = any> extends Emittery.Typed<{
       ...this.__meta.prop,
     }
 
+    this.c = Object.entries(this.__meta.prop).map(([k, v]) => {
+      return [k, new Column({
+        name: k,
+        table: this,
+        prop: v as IPropRow<any>,
+      })]
+    }).reduce((prev, [k, v]: any[]) => ({ ...prev, [k]: v }), {}) as any
+
     Object.entries(this.__meta.prop).map(([k, v]) => {
       if (v) {
         const { onUpdate } = v as any
@@ -75,21 +104,21 @@ export class Table<E = any> extends Emittery.Typed<{
       default?: any
       type?: keyof typeof AliasToSqliteType
     }) => {
-      if (typeof v.default === 'undefined') {
+      const def = !['undefined', 'function'].includes(typeof v.default) ? this.__transform(k, 'set')(v.default) : v.default
+
+      if (typeof def === 'undefined') {
         return ''
-      } else if (typeof v.default === 'string') {
-        return `DEFAULT '${v.default.replace(/'/g, "[']")}'`
-      } else if (typeof v.default === 'number') {
-        return `DEFAULT ${v.default}`
-      } else if (typeof v.default === 'boolean') {
-        return `DEFAULT ${v.default ? 1 : 0}`
+      } else if (typeof def === 'string') {
+        return `DEFAULT '${def.replace(/'/g, "[']")}'`
+      } else if (typeof def === 'number') {
+        return `DEFAULT ${def}`
+      } else if (typeof def === 'boolean') {
+        return `DEFAULT ${def ? 1 : 0}`
       } else if (typeof v.default === 'function') {
         this.on('pre-create', async ({ entry }) => {
           (entry as any)[k] = (entry as any)[k] || await v.default!(entry)
         })
         return ''
-      } else if (v.type && (transformers as any)[v.type]) {
-        return `DEFAULT ${(transformers as any)[v.type].set(v.default)}`
       }
 
       return ''
@@ -218,14 +247,7 @@ export class Table<E = any> extends Emittery.Typed<{
       const values: Record<string, any> = {}
 
       for (let [k, v] of Object.entries(entry)) {
-        const prop = (this.__meta.prop as any)[k]
-        if (prop && prop.type) {
-          const tr = (transformers as any)[prop.type]
-          if (tr) {
-            v = tr.set(v)
-          }
-        }
-
+        v = this.__transform(k, 'set')(v)
         bracketed.push(k)
         Object.assign(values, { [bindings.pop()]: v })
       }
@@ -259,18 +281,10 @@ export class Table<E = any> extends Emittery.Typed<{
       const setV: Record<string, any> = {}
 
       for (let [k, v] of Object.entries<any>(set)) {
-        const prop = (this.__meta.prop as any)[k]
-        if (prop) {
-          const { type } = prop
-          const tr = type ? (transformers as any)[type] : undefined
-          if (tr) {
-            v = tr.set(v)
-          }
-
-          const id = bindings.pop()
-          setK.push(`${k} = ${id}`)
-          setV[id] = v
-        }
+        v = this.__transform(k, 'set')(v)
+        const id = bindings.pop()
+        setK.push(`${k} = ${id}`)
+        setV[id] = v
       }
 
       sql = {
@@ -310,9 +324,29 @@ export class Table<E = any> extends Emittery.Typed<{
       await db.run(sql.$statement, sql.$params)
     }
   }
+
+  __transform (k: string, method: 'get' | 'set' = 'set') {
+    let fn: ((a: any) => any) | null = null
+
+    const prop = (this.__meta.prop as any)[k] as IPropRow<any>
+    if (prop) {
+      if (prop.transform) {
+        fn = prop.transform[method] || null
+      }
+
+      if (!fn) {
+        const t = (_transformers as any)[prop.type] as ITransformer<any>
+        if (t) {
+          fn = t[method] || null
+        }
+      }
+    }
+
+    return fn || ((a: any) => a)
+  }
 }
 
-export const transformers: Record<SqliteExt, ITransformer<any>> = {
+export const _transformers: Record<SqliteExt, ITransformer<any>> = {
   Date: {
     get: (repr) => typeof repr === 'number' ? new Date(repr) : null,
     set: (d) => d ? d instanceof Date ? +d : +new Date(d) : null,

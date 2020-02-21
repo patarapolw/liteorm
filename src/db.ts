@@ -2,33 +2,26 @@ import 'bluebird-global'
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
-import { Table, ISql } from './table'
+import { Table, ISql, Column } from './table'
 import { parseCond } from './find'
 import { safeColumnName, SafeIds } from './utils'
-
-interface ITableWithKey<T = any> {
-  table: Table<T>
-  key?: keyof T
-}
 
 export class Db extends Emittery.Typed<{
   'pre-find': {
     cond: any
     tables: {
       type?: 'inner' | 'left' | 'cross' | 'natural'
-      from?: ITableWithKey<any>
-      to: ITableWithKey<any> | Table<any>
+      from?: Column
+      to: Column | Table<any>
     }[]
     select: {
-      table?: Table<any>
-      key: string
+      key: string | Column
       alias?: string
     }[]
     options: {
       postfix?: string
       sort?: {
-        table: Table<any>
-        key: string
+        key: Column
         desc?: boolean
       }
       offset?: number
@@ -66,8 +59,8 @@ export class Db extends Emittery.Typed<{
 
   find (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: ITableWithKey<any>
-    to: ITableWithKey<any> | Table<any>
+    from?: Column
+    to: Column | Table<any>
   })[]) {
     const bindings = new SafeIds()
 
@@ -79,16 +72,14 @@ export class Db extends Emittery.Typed<{
       } : Record<string, any>[]
     >(
       cond: Record<string, any>,
-      select: (string | {
-        table?: Table<any>
-        key: string
+      select: (string | Column | {
+        key: string | Column
         alias?: string
       })[],
       options: {
         postfix?: string
         sort?: {
-          table: Table<any>
-          key: string
+          key: Column
           desc?: boolean
         }
         offset?: number
@@ -96,7 +87,7 @@ export class Db extends Emittery.Typed<{
       } = {},
       sqlOnly?: SqlOnly,
     ): Promise<R> => {
-      const selectArray = select.map((s) => typeof s === 'string' ? { key: s } : s)
+      const selectArray = select.map((s) => (typeof s === 'string' || s instanceof Column) ? { key: s } : s)
       const tablesArray = tables.map((t) => t instanceof Table ? { to: t } : t)
 
       await this.emit('pre-find', {
@@ -106,17 +97,23 @@ export class Db extends Emittery.Typed<{
         options: options || {},
       })
 
-      const selectDict = selectArray.map(({ table, key, alias }) => {
-        const k = table ? `${table.__meta.name}.${key}` : key
-        const v = alias || (table ? `${table.__meta.name}__${key}` : key)
-        return [k, v]
-      }).reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {} as Record<string, string>)
+      const selectDict = selectArray.map(({ key, alias }) => {
+        const k = key instanceof Column ? `${key.tableName}.${key.columnName}` : key
+        const a = alias || (key instanceof Column ? `${key.tableName}__${key.columnName}` : key)
+        return [a, {
+          key: k,
+          column: key instanceof Column ? key : undefined,
+        }]
+      }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
+        key: string
+        column?: Column
+      }>)
 
       const tableRecord: Record<string, Table<any>> = [
         table0,
         ...tables.map((t) => t instanceof Table
           ? t
-          : t.to instanceof Table ? t.to : t.to.table),
+          : t.to instanceof Table ? t.to : t.to.opts.table),
       ].reduce((prev, t) => ({ ...prev, [t.__meta.name]: t }), {})
 
       const where = parseCond(cond, tableRecord, bindings)
@@ -124,7 +121,7 @@ export class Db extends Emittery.Typed<{
       const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
         postfix.push(`ORDER BY ${safeColumnName(
-          `${options.sort.table.__meta.name}.${options.sort.key}`,
+          `${options.sort.key.tableName}.${options.sort.key.columnName}`,
         )} ${options.sort.desc ? 'DESC' : 'ASC'}`)
       }
       if (options.limit) {
@@ -136,22 +133,22 @@ export class Db extends Emittery.Typed<{
 
       const sql = {
         $statement: [
-          `SELECT ${Object.entries(selectDict).map(([k, v]) => {
-            return k === v ? safeColumnName(k) : `${safeColumnName(k)} AS ${safeColumnName(v)}`
+          `SELECT ${Object.entries(selectDict).map(([a, k]) => {
+            return k.key === a ? safeColumnName(k.key) : `${safeColumnName(k.key)} AS ${safeColumnName(a)}`
           }).join(',')}`,
           `FROM ${safeColumnName(table0.__meta.name)}`,
           ...tablesArray.map((t) => {
-            const toTable = t.to instanceof Table ? t.to : t.to.table
+            const toTable = t.to instanceof Table ? t.to : t.to.opts.table
 
             if (t.from) {
               return [
                 `${t.type || 'INNER'} JOIN ${safeColumnName(toTable.__meta.name)}`,
                 'ON',
-                safeColumnName(`${t.from.table.__meta.name}.${t.from.key ? String(t.from.key) : t.from.table.__primaryKey}`),
+                safeColumnName(`${t.from.tableName}.${t.from.columnName}`),
                 '=',
-                safeColumnName(typeof t.from === 'string'
-                  ? t.from
-                  : `${t.from.table.__meta.name}.${t.from.key ? String(t.from.key) : t.from.table.__primaryKey}`),
+                safeColumnName(t.to instanceof Table
+                  ? `${toTable.__meta.name}.${toTable.__primaryKey}`
+                  : `${toTable.__meta.name}.${t.to.columnName}`),
               ].join(' ')
             } else {
               return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.__meta.name)}`
@@ -169,22 +166,31 @@ export class Db extends Emittery.Typed<{
         return { sql, bindings } as any
       }
 
-      return this.sql.all(sql.$statement, sql.$params) as any
+      const rs = await this.sql.all(sql.$statement, sql.$params) as any[]
+      rs.map((r) => {
+        return Object.entries(r).map(([alias, v]) => {
+          if (selectDict[alias] && selectDict[alias].column) {
+            const col = selectDict[alias].column!
+            r[alias] = col.opts.table.__transform(selectDict[alias].key, 'get')(v)
+          }
+        })
+      })
+
+      return rs as any
     }
   }
 
   findIds (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: ITableWithKey<any>
-    to: ITableWithKey<any> | Table<any>
+    from?: Column
+    to: Column | Table<any>
   })[]) {
     return async (
       cond: Record<string, any>,
       options: {
         postfix?: string
         sort?: {
-          table: Table<any>
-          key: string
+          key: Column
           desc?: boolean
         }
         offset?: number
@@ -196,7 +202,7 @@ export class Db extends Emittery.Typed<{
         ...tables.map((t) => t instanceof Table
           ? t
           : t.to instanceof Table
-            ? t.to : t.to.table),
+            ? t.to : t.to.opts.table),
       ]
 
       return Promise.all(tt.map(async (t) => {
@@ -214,8 +220,8 @@ export class Db extends Emittery.Typed<{
 
   update (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: ITableWithKey<any>
-    to: ITableWithKey<any> | Table<any>
+    from?: Column
+    to: Column | Table<any>
   })[]) {
     return async (
       cond: Record<string, any>,
@@ -226,8 +232,7 @@ export class Db extends Emittery.Typed<{
       options: {
         postfix?: string
         sort?: {
-          table: Table<any>
-          key: string
+          key: Column
           desc?: boolean
         }
         offset?: number
@@ -248,16 +253,15 @@ export class Db extends Emittery.Typed<{
 
   delete (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: ITableWithKey<any>
-    to: ITableWithKey<any> | Table<any>
+    from?: Column
+    to: Column | Table<any>
   })[]) {
     return async (
       cond: Record<string, any>,
       options: {
         postfix?: string
         sort?: {
-          table: Table<any>
-          key: string
+          key: Column
           desc?: boolean
         }
         offset?: number
