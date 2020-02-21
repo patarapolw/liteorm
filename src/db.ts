@@ -16,7 +16,7 @@ export class Db extends Emittery.Typed<{
     }[]
     select: {
       [alias: string]: string | Column
-    } | '*'
+    }
     options: {
       postfix?: string
       sort?: {
@@ -86,6 +86,9 @@ export class Db extends Emittery.Typed<{
       sqlOnly?: SqlOnly,
     ): Promise<R> => {
       const tablesArray = tables.map((t) => t instanceof Table ? { to: t } : t)
+      if (select === '*') {
+        select = table0.c
+      }
 
       await this.emit('pre-find', {
         cond,
