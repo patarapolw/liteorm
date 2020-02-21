@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { db } from './0-create'
+import { db, dbNote, dbCard } from './0-create'
 
 export default () => describe('chainDatabase', () => {
   ;[
@@ -15,19 +15,13 @@ export default () => describe('chainDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      const r = await db.db.find(db.cols.note, {
-        from: {
-          table: db.cols.note,
-        },
-        to: {
-          table: db.cols.card,
-          key: 'noteId',
-        },
+      const r = await db.find(dbCard, {
+        from: dbCard.c.noteId,
+        to: dbNote,
       })(
-        cond, ['front', 'stat', 'nextReview'], {
+        cond, [dbCard.c.front, dbCard.c.stat, dbCard.c.nextReview], {
           sort: {
-            table: db.cols.card,
-            key: 'front',
+            key: dbCard.c.front,
             desc: true,
           },
           offset: 10,

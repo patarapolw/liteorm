@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { db } from './0-create'
+import { db, dbCard } from './0-create'
 
 export default () => describe('readDatabase', () => {
   ;[
@@ -25,19 +25,25 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const count = await db.db.find(db.cols.card)(cond, [{ key: 'COUNT(*)', alias: 'count' }])
+      const count = await db.find(dbCard)(cond, [{ key: 'COUNT(*)', alias: 'count' }])
       assert(count[0].count > 0)
 
-      // const result = await db.cols.card.find(cond, ['front', 'stat', 'nextReview', 'isCool', 'v2b'], {
-      //   sort: {
-      //     key: 'front',
-      //     desc: true,
-      //   },
-      //   offset: 10,
-      //   limit: 5,
-      // })
+      const result = await db.find(dbCard)(cond, [
+        { key: dbCard.c.front, alias: 'front' },
+        { key: dbCard.c.stat, alias: 'stat' },
+        { key: dbCard.c.nextReview, alias: 'nextReview' },
+        { key: dbCard.c.isCool, alias: 'isCool' },
+        { key: dbCard.c.v2b, alias: 'v2b' },
+      ], {
+        sort: {
+          key: dbCard.c.front,
+          desc: true,
+        },
+        offset: 10,
+        limit: 5,
+      })
 
-      // console.dir(result, { depth: null })
+      console.dir(result, { depth: null })
 
       // db.cols.card.off('find', console.log)
     })
@@ -49,7 +55,7 @@ export default () => describe('readDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      await db.db.find(db.cols.card)(cond, ['*'], { limit: 5 }).catch((err) => {
+      await db.find(dbCard)(cond, ['*'], { limit: 5 }).catch((err) => {
         assert(err, 'Error should be thrown.')
       })
     })

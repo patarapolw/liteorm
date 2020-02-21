@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { Table } from './table'
+import { Table, ITransformer } from './table'
 import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias } from './utils'
 
 export function primary<
@@ -50,6 +50,7 @@ export function prop<
   references?: string | Table<any> | { table: Table<any>; key: string }
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  transform?: Partial<ITransformer<any>>
 } = {}): PropertyDecorator {
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)
@@ -88,6 +89,7 @@ export function prop<
       references,
       default: params.default ? params.default : undefined,
       onUpdate: params.onUpdate,
+      transform: params.transform,
     } as IPropRow<T, Entry>
 
     Reflect.defineMetadata('sqlite:prop', prop, target)
@@ -175,6 +177,7 @@ export interface IPropRow<
   references?: string
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  transform?: Partial<ITransformer<any>>
 }
 
 export interface ISqliteMeta<T> {

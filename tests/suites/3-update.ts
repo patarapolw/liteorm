@@ -1,6 +1,6 @@
 import assert from 'assert'
 
-import { db } from './0-create'
+import { db, dbCard } from './0-create'
 
 export default () => describe('updateDatabase', () => {
   ;[
@@ -15,8 +15,8 @@ export default () => describe('updateDatabase', () => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('update', console.log)
 
-      await db.db.update(db.cols.card)(cond, { front: 'NoNUM' })
-      const r = await db.db.find(db.cols.card)(cond, ['front'])
+      await db.update(dbCard)(cond, { front: 'NoNUM' })
+      const r = await db.find(dbCard)(cond, [dbCard.c.front])
 
       assert(r.every((r0) => r0.front === 'NoNUM'))
 
