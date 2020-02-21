@@ -14,7 +14,9 @@ export default () => describe('deleteDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       await db.delete(dbCard)(cond)
-      const r = await db.find(dbCard)(cond, ['ROWID'])
+      const r = await db.find(dbCard)(cond, {
+        id: 'ROWID',
+      })
       assert(r.length === 0)
     })
   })

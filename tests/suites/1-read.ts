@@ -25,16 +25,18 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const count = await db.find(dbCard)(cond, [{ key: 'COUNT(*)', alias: 'count' }])
+      const count = await db.find(dbCard)(cond, {
+        count: 'COUNT(*)',
+      })
       assert(count[0].count > 0)
 
-      const result = await db.find(dbCard)(cond, [
-        { key: dbCard.c.front, alias: 'front' },
-        { key: dbCard.c.stat, alias: 'stat' },
-        { key: dbCard.c.nextReview, alias: 'nextReview' },
-        { key: dbCard.c.isCool, alias: 'isCool' },
-        { key: dbCard.c.v2b, alias: 'v2b' },
-      ], {
+      const result = await db.find(dbCard)(cond, {
+        front: dbCard.c.front,
+        stat: dbCard.c.stat,
+        nextReview: dbCard.c.nextReview,
+        isCool: dbCard.c.isCool,
+        v2b: dbCard.c.v2b,
+      }, {
         sort: {
           key: dbCard.c.front,
           desc: true,
@@ -43,7 +45,7 @@ export default () => describe('readDatabase', () => {
         limit: 5,
       })
 
-      // console.dir(result, { depth: null })
+      console.dir(result, { depth: null })
 
       // db.cols.card.off('find', console.log)
     })
@@ -55,7 +57,10 @@ export default () => describe('readDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      await db.find(dbCard)(cond, ['*'], { limit: 5 }).catch((err) => {
+      /**
+       * Wildcard is allowed, but I think it should be discouraged.
+       */
+      await db.find(dbCard)(cond, '*', { limit: 5 }).catch((err) => {
         assert(err, 'Error should be thrown.')
       })
     })
