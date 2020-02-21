@@ -1,10 +1,31 @@
-import nanoid from 'nanoid'
-
 /**
+ * Allow chars are
  * https://stackoverflow.com/questions/31788990/sqlite-what-are-the-restricted-characters-for-identifiers
+ *
+ * The number of bindings allowed at a time are 999.
+ * https://www.sqlite.org/c3ref/bind_blob.html
+ *
+ * This is also a limit on satement length, but the number of bindings is more limiting.
+ * https://www.sqlite.org/limits.html
  */
-export function safeId () {
-  return nanoid().replace(/-/g, '$')
+export class SafeIds {
+  ids: string[]
+
+  constructor (count = 999) {
+    const ids = new Set<number>()
+    while (ids.size < count) {
+      ids.add(Math.random())
+    }
+    this.ids = Array.from(ids).map((id) => '$' + id.toString(36).substr(2))
+  }
+
+  pop () {
+    const id = this.ids.pop()
+    if (!id) {
+      throw new Error('You use too many parameters. Please see SQLite\'s parameter count limit (999) here -- https://www.sqlite.org/c3ref/bind_blob.html')
+    }
+    return id
+  }
 }
 
 /**

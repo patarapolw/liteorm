@@ -2,9 +2,9 @@ import crypto from 'crypto'
 import fs from 'fs'
 
 import faker from 'faker'
-import nanoid from 'nanoid'
 
 import { Db, Table, primary, prop, Entity } from '../../src'
+import { SafeIds } from '../../src/utils'
 
 @Entity({ name: 'note', timestamp: true })
 class DbNote {
@@ -17,7 +17,7 @@ const dbNote = new Table(DbNote)
 
 @Entity({ name: 'card', timestamp: true })
 class DbCard {
-  @primary({ default: () => nanoid() }) _id?: string
+  @primary() _id!: string
   @prop({ references: dbNote }) noteId!: any
   @prop() isCool!: boolean
   @prop() front!: string
@@ -80,6 +80,8 @@ export async function createDatabase (filename: string = 'tests/test.db') {
     }
   }))
 
+  const ids = new SafeIds(5000)
+
   await Promise.all(Array.from({ length: 1000 }).map(async () => {
     try {
       const data = Array.from({ length: faker.random.number(5) })
@@ -87,7 +89,7 @@ export async function createDatabase (filename: string = 'tests/test.db') {
         .reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {})
 
       const noteId = await db.db.create(dbNote)({
-        key: nanoid(),
+        key: ids.pop(),
         data,
         order: Object.keys(data).map((k, i) => [k, i]).reduce((prev, [k, i]) => ({ ...prev, [k]: i }), {}),
       })
@@ -95,6 +97,7 @@ export async function createDatabase (filename: string = 'tests/test.db') {
       await Promise.all(Array.from({ length: faker.random.number(3) }).map(async () => {
         try {
           await db.db.create(dbCard)({
+            _id: ids.pop(),
             isCool: faker.random.arrayElement([true, false]),
             v2b: faker.random.number(5) === 0
               ? undefined

@@ -1,7 +1,17 @@
 import { Table, ISql } from './table'
-import { safeColumnName, safeId } from './utils'
+import { safeColumnName, SafeIds } from './utils'
 
-export function parseCond (q: Record<string, any>, cols: Record<string, Table<any>>): ISql {
+/**
+ *
+ * @param q
+ * @param cols
+ * @param getFreeBinding Can be generated via '@/utils#SafeIds'
+ */
+export function parseCond (
+  q: Record<string, any>,
+  cols: Record<string, Table<any>>,
+  safeIds: SafeIds,
+): ISql {
   if (q.$statement) {
     return {
       $statement: q.$statement,
@@ -14,7 +24,7 @@ export function parseCond (q: Record<string, any>, cols: Record<string, Table<an
 
   if (Array.isArray(q.$or)) {
     const c = q.$or.map((el) => {
-      const r = parseCond(el, cols)
+      const r = parseCond(el, cols, safeIds)
       Object.assign($params, r.$params)
 
       return r.$statement
@@ -23,7 +33,7 @@ export function parseCond (q: Record<string, any>, cols: Record<string, Table<an
     subClause.push(`(${c})`)
   } else if (Array.isArray(q.$and)) {
     const c = q.$and.map((el) => {
-      const r = parseCond(el, cols)
+      const r = parseCond(el, cols, safeIds)
       Object.assign($params, r.$params)
 
       return r.$statement
@@ -31,7 +41,7 @@ export function parseCond (q: Record<string, any>, cols: Record<string, Table<an
 
     subClause.push(`(${c})`)
   } else {
-    const r = _parseCondBasic(q, cols)
+    const r = _parseCondBasic(q, cols, safeIds)
 
     subClause.push(`(${r.$statement})`)
     Object.assign($params, r.$params)
@@ -43,7 +53,11 @@ export function parseCond (q: Record<string, any>, cols: Record<string, Table<an
   }
 }
 
-function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<any>>): ISql {
+function _parseCondBasic (
+  cond: Record<string, any>,
+  cols: Record<string, Table<any>>,
+  safeIds: SafeIds,
+): ISql {
   if (cond.$statement) {
     return {
       $statement: cond.$statement,
@@ -88,23 +102,21 @@ function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<
       v = +v
     }
 
-    const id = `$${safeId()}`
-
     if (v) {
       if (Array.isArray(v)) {
         if (isStrArray) {
           cList.push(`(${(v.map((v0) => {
-            const id = `$${safeId()}`
+            const id = safeIds.pop()
             Object.assign($params, { [id]: v0 })
             return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
           })).join(' AND ')})`)
         } else {
           if (v.length > 1) {
-            const vObj = v.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
+            const vObj = v.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
             cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
             Object.assign($params, vObj)
           } else if (v.length === 1) {
-            const id = `$${safeId()}`
+            const id = safeIds.pop()
             cList.push(`${k} = ${id}`)
             Object.assign($params, { [id]: v[0] })
           }
@@ -121,17 +133,17 @@ function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<
             case '$in':
               if (isStrArray) {
                 cList.push(`(${(v1.map((v0) => {
-                  const id = `$${safeId()}`
+                  const id = safeIds.pop()
                   Object.assign($params, { [id]: v0 })
                   return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
                 })).join(' OR ')})`)
               } else {
                 if (v1.length > 1) {
-                  const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
+                  const vObj = v1.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
                   cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
                   Object.assign($params, vObj)
                 } else if (v1.length === 1) {
-                  const id = `$${safeId()}`
+                  const id = safeIds.pop()
                   cList.push(`${k} = ${id}`)
                   Object.assign($params, { [id]: v1[0] })
                 }
@@ -140,11 +152,11 @@ function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<
               break
             case '$nin':
               if (v1.length > 1) {
-                const vObj = v1.reduce((prev, c) => ({ ...prev, [`$${safeId()}`]: c }), {})
+                const vObj = v1.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
                 cList.push(`${k} NOT IN (${Object.keys(vObj).join(',')})`)
                 Object.assign($params, vObj)
               } else {
-                const id = `$${safeId()}`
+                const id = safeIds.pop()
                 cList.push(`${k} != ${id}`)
                 Object.assign($params, { [id]: v1[0] })
               }
@@ -166,6 +178,7 @@ function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<
           }
         }
 
+        const id = safeIds.pop()
         switch (op) {
           case '$like':
             cList.push(`${k} LIKE ${id}`)
@@ -210,9 +223,11 @@ function _parseCondBasic (cond: Record<string, any>, cols: Record<string, Table<
             doDefault(k, v, id)
         }
       } else {
+        const id = safeIds.pop()
         doDefault(k, v, id)
       }
     } else {
+      const id = safeIds.pop()
       doDefault(k, v, id)
     }
   }

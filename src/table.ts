@@ -2,8 +2,7 @@ import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
 import { ISqliteMeta, IPropRow } from './decorators'
-import { SqliteExt, AliasToSqliteType, safeColumnName, safeId } from './utils'
-import { parseCond } from './find'
+import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds } from './utils'
 
 export interface ISql {
   $statement: string
@@ -25,12 +24,12 @@ export class Table<E = any> extends Emittery.Typed<{
   }
   'create-sql': ISql
   'pre-update': {
-    id: any
+    sql: ISql
     set: Partial<E>
   }
   'update-sql': ISql
   'pre-delete': {
-    id: any
+    sql: ISql
   }
   'delete-sql': ISql
 }> {
@@ -204,6 +203,8 @@ export class Table<E = any> extends Emittery.Typed<{
       ignoreErrors?: boolean
     },
   ) => Promise<number> {
+    const bindings = new SafeIds()
+
     return async (entry, options = {}) => {
       const postfix = options.postfix ? [options.postfix] : []
 
@@ -226,7 +227,7 @@ export class Table<E = any> extends Emittery.Typed<{
         }
 
         bracketed.push(k)
-        Object.assign(values, { [`$${safeId()}`]: v })
+        Object.assign(values, { [bindings.pop()]: v })
       }
 
       const sql = {
@@ -246,20 +247,16 @@ export class Table<E = any> extends Emittery.Typed<{
     }
   }
 
-  __updateById (db: sqlite.Database): (
-    id: any,
-    set: Partial<E>
-  ) => Promise<void> {
-    return async (id, set) => {
-      await this.emit('pre-update', { id, set })
+  __updateBySql (db: sqlite.Database) {
+    return async (
+      sql: ISql,
+      set: Partial<E>,
+      bindings: SafeIds,
+    ) => {
+      await this.emit('pre-update', { sql, set })
 
       const setK: string[] = []
       const setV: Record<string, any> = {}
-      const where = parseCond({
-        [this.__primaryKey]: id,
-      }, {
-        [this.__meta.name]: this,
-      })
 
       for (let [k, v] of Object.entries<any>(set)) {
         const prop = (this.__meta.prop as any)[k]
@@ -270,22 +267,23 @@ export class Table<E = any> extends Emittery.Typed<{
             v = tr.set(v)
           }
 
-          const id = `$${safeId()}`
-
+          const id = bindings.pop()
           setK.push(`${k} = ${id}`)
           setV[id] = v
         }
       }
 
-      const sql: ISql = {
+      sql = {
         $statement: [
-        `UPDATE ${safeColumnName(this.__meta.name)}`,
-        `SET ${setK.map(safeColumnName).join(',')}`,
-        `WHERE ${where.$statement}`,
+          `UPDATE ${safeColumnName(this.__meta.name)}`,
+          `SET ${setK.map(safeColumnName).join(',')}`,
+          `WHERE ${safeColumnName(this.__primaryKey)}`,
+          'IN',
+          `(${sql.$statement})`,
         ].join(' '),
         $params: {
           ...setV,
-          ...where.$params,
+          ...sql.$params,
         },
       }
 
@@ -294,24 +292,18 @@ export class Table<E = any> extends Emittery.Typed<{
     }
   }
 
-  __deleteById (db: sqlite.Database): (
-    id: any
-  ) => Promise<void> {
-    return async (id) => {
-      await this.emit('pre-delete', { id })
+  __deleteBySql (db: sqlite.Database) {
+    return async (sql: ISql): Promise<void> => {
+      await this.emit('pre-delete', { sql })
 
-      const where = parseCond({
-        [this.__primaryKey]: id,
-      }, {
-        [this.__meta.name]: this,
-      })
-
-      const sql: ISql = {
+      sql = {
         $statement: [
-        `DELETE FROM ${safeColumnName(this.__meta.name)}`,
-        `WHERE ${where.$statement}`,
+          `DELETE FROM ${safeColumnName(this.__meta.name)}`,
+          `WHERE ${safeColumnName(this.__primaryKey)}`,
+          'IN',
+          `(${sql.$statement})`,
         ].join(' '),
-        $params: where.$params,
+        $params: sql.$params,
       }
 
       await this.emit('delete-sql', sql)
