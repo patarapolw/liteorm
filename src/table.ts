@@ -254,9 +254,11 @@ export class Table<E = any> extends Emittery.Typed<{
       const values: Record<string, any> = {}
 
       for (let [k, v] of Object.entries(entry)) {
-        v = this.transform(k, 'set')(v)
-        bracketed.push(k)
-        Object.assign(values, { [bindings.pop()]: v })
+        if (typeof v !== 'undefined') {
+          v = this.transform(k, 'set')(v)
+          bracketed.push(k)
+          Object.assign(values, { [bindings.pop()]: v })
+        }
       }
 
       const sql = {
@@ -288,10 +290,12 @@ export class Table<E = any> extends Emittery.Typed<{
       const setV: Record<string, any> = {}
 
       for (let [k, v] of Object.entries<any>(set)) {
-        v = this.transform(k, 'set')(v)
-        const id = bindings.pop()
-        setK.push(`${k} = ${id}`)
-        setV[id] = v
+        if (typeof v !== 'undefined') {
+          v = this.transform(k, 'set')(v)
+          const id = bindings.pop()
+          setK.push(`${k} = ${id}`)
+          setV[id] = v
+        }
       }
 
       sql = {
