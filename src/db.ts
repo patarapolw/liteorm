@@ -171,7 +171,7 @@ export class Db extends Emittery.Typed<{
         return Object.entries(r).map(([alias, v]) => {
           if (selectDict[alias] && selectDict[alias].column) {
             const col = selectDict[alias].column!
-            r[alias] = col.opts.table.__transform(selectDict[alias].key, 'get')(v)
+            r[alias] = col.opts.table.__transform(col.columnName, 'get')(v)
           }
         })
       })

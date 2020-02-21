@@ -43,7 +43,7 @@ export default () => describe('readDatabase', () => {
         limit: 5,
       })
 
-      console.dir(result, { depth: null })
+      // console.dir(result, { depth: null })
 
       // db.cols.card.off('find', console.log)
     })
