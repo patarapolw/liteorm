@@ -4,7 +4,7 @@ import Emittery from 'emittery'
 
 import { Table, ISql } from './table'
 import { parseCond } from './find'
-import { safeColumnName } from './utils'
+import { safeColumnName, SafeIds } from './utils'
 
 interface ITableWithKey<T = any> {
   table: Table<T>
@@ -69,7 +69,15 @@ export class Db extends Emittery.Typed<{
     from?: ITableWithKey<any>
     to: ITableWithKey<any> | Table<any>
   })[]) {
-    return async (
+    const bindings = new SafeIds()
+
+    return async <
+      SqlOnly extends boolean = false,
+      R = SqlOnly extends true ? {
+        sql: ISql
+        bindings: SafeIds
+      } : Record<string, any>[]
+    >(
       cond: Record<string, any>,
       select: (string | {
         table?: Table<any>
@@ -86,7 +94,8 @@ export class Db extends Emittery.Typed<{
         offset?: number
         limit?: number
       } = {},
-    ): Promise<Record<string, any>[]> => {
+      sqlOnly?: SqlOnly,
+    ): Promise<R> => {
       const selectArray = select.map((s) => typeof s === 'string' ? { key: s } : s)
       const tablesArray = tables.map((t) => t instanceof Table ? { to: t } : t)
 
@@ -110,7 +119,7 @@ export class Db extends Emittery.Typed<{
           : t.to instanceof Table ? t.to : t.to.table),
       ].reduce((prev, t) => ({ ...prev, [t.__meta.name]: t }), {})
 
-      const where = parseCond(cond, tableRecord)
+      const where = parseCond(cond, tableRecord, bindings)
 
       const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
@@ -156,7 +165,11 @@ export class Db extends Emittery.Typed<{
 
       await this.emit('find-sql', sql)
 
-      return this.sql.all(sql.$statement, sql.$params)
+      if (sqlOnly) {
+        return { sql, bindings } as any
+      }
+
+      return this.sql.all(sql.$statement, sql.$params) as any
     }
   }
 
@@ -186,17 +199,16 @@ export class Db extends Emittery.Typed<{
             ? t.to : t.to.table),
       ]
 
-      return (await this.find(table0, ...tables)(cond, tt.map((t) => {
-        return {
+      return Promise.all(tt.map(async (t) => {
+        const select = {
           key: t.__primaryKey,
-          alias: `${t.__meta.name}__id`,
+          alias: `${t.__meta.name}__$$id`,
         }
-      }), options)).map((el) => {
-        return Object.entries(el).map(([alias, id]) => ({
-          table: tt.filter((t) => `${t.__meta.name}__id` === alias)[0],
-          id,
-        }))
-      })
+        return {
+          ...(await this.find(table0, ...tables)(cond, [select], options, true)),
+          table: t,
+        }
+      }))
     }
   }
 
@@ -207,7 +219,10 @@ export class Db extends Emittery.Typed<{
   })[]) {
     return async (
       cond: Record<string, any>,
-      set: any,
+      set: Record<string, any> | {
+        table: Table<any>
+        set: Record<string, any>
+      }[],
       options: {
         postfix?: string
         sort?: {
@@ -219,10 +234,14 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      return Promise.all((await this.findIds(table0, ...tables)(cond, options)).map((el) => {
-        return Promise.all(el.map((t) => {
-          return t.table.__updateById(this.sql)(t.id, set)
-        }))
+      await Promise.all((await this.findIds(table0, ...tables)(cond, options)).map(async ({ sql, bindings, table }) => {
+        if (Array.isArray(set)) {
+          await Promise.all(set.filter((s) => s.table === table).map(async (s) => {
+            await table.__updateBySql(this.sql)(sql, s.set, bindings)
+          }))
+        } else {
+          await table.__updateBySql(this.sql)(sql, set, bindings)
+        }
       }))
     }
   }
@@ -245,10 +264,8 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      return Promise.all((await this.findIds(table0, ...tables)(cond, options)).map((el) => {
-        return Promise.all(el.map((t) => {
-          return t.table.__deleteById(this.sql)(t.id)
-        }))
+      await Promise.all((await this.findIds(table0, ...tables)(cond, options)).map(async ({ sql, table }) => {
+        await table.__deleteBySql(this.sql)(sql)
       }))
     }
   }
