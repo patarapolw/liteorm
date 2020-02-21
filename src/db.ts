@@ -53,7 +53,7 @@ export class Db extends Emittery.Typed<{
   }
 
   create<E> (table: Table<E>) {
-    return table.__create(this.sql)
+    return table.create(this.sql)
   }
 
   find (table0: Table<any>, ...tables: (Table<any> | {
@@ -95,12 +95,12 @@ export class Db extends Emittery.Typed<{
       })
 
       const selectDict = (select && typeof select === 'object')
-        ? Object.entries(select).map(([alias, key]) => {
-          const k = key instanceof Column ? `${key.tableName}.${key.columnName}` : key
-          const a = alias || (key instanceof Column ? `${key.tableName}__${key.columnName}` : key)
+        ? Object.entries(select).map(([alias, col]) => {
+          const k = col instanceof Column ? `${col.tableName}.${col.name}` : col
+          const a = alias || (col instanceof Column ? `${col.tableName}__${col.name}` : col)
           return [a, {
             key: k,
-            column: key instanceof Column ? key : undefined,
+            column: col instanceof Column ? col : undefined,
           }]
         }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
           key: string
@@ -113,14 +113,14 @@ export class Db extends Emittery.Typed<{
         ...tables.map((t) => t instanceof Table
           ? t
           : t.to instanceof Table ? t.to : t.to.opts.table),
-      ].reduce((prev, t) => ({ ...prev, [t.__meta.name]: t }), {})
+      ].reduce((prev, t) => ({ ...prev, [t.m.__meta.name]: t }), {})
 
       const where = parseCond(cond, tableRecord, bindings)
 
       const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
         postfix.push(`ORDER BY ${safeColumnName(
-          `${options.sort.key.tableName}.${options.sort.key.columnName}`,
+          `${options.sort.key.tableName}.${options.sort.key.name}`,
         )} ${options.sort.desc ? 'DESC' : 'ASC'}`)
       }
       if (options.limit) {
@@ -135,22 +135,22 @@ export class Db extends Emittery.Typed<{
           `SELECT ${selectDict ? Object.entries(selectDict).map(([a, k]) => {
             return k.key === a ? safeColumnName(k.key) : `${safeColumnName(k.key)} AS ${safeColumnName(a)}`
           }).join(',') : select}`,
-          `FROM ${safeColumnName(table0.__meta.name)}`,
+          `FROM ${safeColumnName(table0.m.__meta.name)}`,
           ...tablesArray.map((t) => {
             const toTable = t.to instanceof Table ? t.to : t.to.opts.table
 
             if (t.from) {
               return [
-                `${t.type || 'INNER'} JOIN ${safeColumnName(toTable.__meta.name)}`,
+                `${t.type || 'INNER'} JOIN ${safeColumnName(toTable.m.__meta.name)}`,
                 'ON',
-                safeColumnName(`${t.from.tableName}.${t.from.columnName}`),
+                safeColumnName(`${t.from.tableName}.${t.from.name}`),
                 '=',
                 safeColumnName(t.to instanceof Table
-                  ? `${toTable.__meta.name}.${toTable.__primaryKey}`
-                  : `${toTable.__meta.name}.${t.to.columnName}`),
+                  ? `${toTable.m.__meta.name}.${toTable.primaryKey}`
+                  : `${toTable.m.__meta.name}.${t.to.name}`),
               ].join(' ')
             } else {
-              return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.__meta.name)}`
+              return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.m.__meta.name)}`
             }
           }),
           `WHERE ${where.$statement}`,
@@ -170,7 +170,7 @@ export class Db extends Emittery.Typed<{
         return Object.entries(r).map(([alias, v]) => {
           if (selectDict && selectDict[alias] && selectDict[alias].column) {
             const col = selectDict[alias].column!
-            r[alias] = col.opts.table.__transform(col.columnName, 'get')(v)
+            r[alias] = col.opts.table.transform(col.name, 'get')(v)
           }
         })
       })
@@ -207,10 +207,10 @@ export class Db extends Emittery.Typed<{
       return Promise.all(tt.map(async (t) => {
         return {
           ...(await this.find(table0, ...tables)(cond, {
-            [`${t.__meta.name}__id`]: new Column({
-              name: t.__primaryKey,
+            [`${t.m.__meta.name}__id`]: new Column({
+              name: t.primaryKey,
               table: t,
-              prop: t.__meta.primary,
+              prop: t.m.__meta.primary,
             }),
           }, options, true)),
           table: t,
