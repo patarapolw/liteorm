@@ -71,27 +71,36 @@ export class Table<E = any> extends Emittery.Typed<{
     super()
     this.m = new M() as any
 
-    /**
-     * __meta is being injected by `@Table`
-     */
-    this.m.__meta.prop = {
-      createdAt: this.m.__meta.createdAt ? { type: 'Date', null: false, default: () => new Date() } : undefined,
-      updatedAt: this.m.__meta.updatedAt ? {
+    if (this.m.__meta.createdAt) {
+      (this.m.__meta.prop as any).createdAt = { type: 'Date', null: false, default: () => new Date() }
+    }
+
+    if (this.m.__meta.updatedAt) {
+      (this.m.__meta.prop as any).updatedAt = {
         type: 'Date',
         null: false,
         default: () => new Date(),
         onUpdate: () => new Date(),
-      } : undefined,
-      ...this.m.__meta.prop,
+      }
     }
 
     this.c = Object.entries(this.m.__meta.prop).map(([k, v]) => {
-      return [k, new Column({
-        name: k,
-        table: this,
-        prop: v as IPropRow<any>,
-      })]
-    }).reduce((prev, [k, v]: any[]) => ({ ...prev, [k]: v }), {}) as any
+      if (v) {
+        return [k, new Column({
+          name: k,
+          table: this,
+          prop: v as IPropRow<any>,
+        })]
+      }
+      return null
+    }).filter((el) => el)
+      .reduce((prev, [k, v]: any) => ({ ...prev, [k]: v }), {}) as any
+
+    (this.c as any)[this.primaryKey] = new Column({
+      name: this.primaryKey,
+      table: this,
+      prop: this.m.__meta.primary,
+    })
 
     Object.entries(this.m.__meta.prop).map(([k, v]) => {
       if (v) {
