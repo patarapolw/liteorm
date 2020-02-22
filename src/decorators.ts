@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 import { Table, ITransformer } from './table'
-import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias } from './utils'
+import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias, SqlFunction } from './utils'
 
 export function primary<
   T extends AliasToJSType[TSql] = any,
@@ -10,7 +10,7 @@ export function primary<
   name?: string
   type?: TSql
   autoincrement?: boolean
-  default?: T | ((entry: Entry) => T | Promise<T>)
+  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
 } = {}): PropertyDecorator {
@@ -50,7 +50,7 @@ export function prop<
   unique?: string | boolean
   null?: boolean
   references?: string | Table<any> | { table: Table<any>; key: string }
-  default?: T | ((entry: Entry) => T | Promise<T>)
+  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<any>>
@@ -165,7 +165,7 @@ export interface IPrimaryRow<
   name: string | string[]
   type?: TSql
   autoincrement: boolean
-  default?: T | ((entry: Entry) => T | Promise<T>)
+  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
 }
@@ -180,7 +180,7 @@ export interface IPropRow<
   null: boolean
   index?: string
   references?: string
-  default?: T | ((entry: Entry) => T | Promise<T>)
+  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<any>>

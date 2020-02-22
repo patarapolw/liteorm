@@ -1,3 +1,7 @@
+export class SqlFunction {
+  constructor (public content: string) {}
+}
+
 /**
  * Allow chars are
  * https://stackoverflow.com/questions/31788990/sqlite-what-are-the-restricted-characters-for-identifiers

@@ -2,7 +2,7 @@ import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
 import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators'
-import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds } from './utils'
+import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds, SqlFunction } from './utils'
 
 export interface ISql {
   $statement: string
@@ -107,10 +107,10 @@ export class Table<
 
     Object.entries(this.m.__meta.prop).map(([k, v]) => {
       if (v) {
-        const { onChange, onUpdate } = v
+        const { default: def, onChange, onUpdate } = v
 
-        if (onChange !== undefined) {
-          const fn = onChange
+        if (typeof def === 'function' || onChange !== undefined) {
+          const fn = def || onChange
 
           this.on('pre-create', async ({ entry }) => {
             (entry as any)[k] = (entry as any)[k] || (typeof fn === 'function' ? await fn(entry) : fn)
@@ -137,6 +137,8 @@ export class Table<
 
       if (typeof def === 'undefined') {
         return ''
+      } else if (def instanceof SqlFunction) {
+        return `DEFAULT ${def.content}`
       } else if (typeof def === 'string') {
         return `DEFAULT '${def.replace(/'/g, "[']")}'`
       } else if (typeof def === 'number') {
@@ -144,9 +146,6 @@ export class Table<
       } else if (typeof def === 'boolean') {
         return `DEFAULT ${def ? 1 : 0}`
       } else if (typeof v.default === 'function') {
-        this.on('pre-create', async ({ entry }) => {
-          (entry as any)[k] = (entry as any)[k] || await v.default!(entry)
-        })
         return ''
       }
 

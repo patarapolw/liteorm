@@ -1,6 +1,7 @@
 import assert from 'assert'
 
 import { db, dbCard } from './0-create'
+import { SqlFunction } from '../../src'
 
 export default () => describe('readDatabase', () => {
   ;[
@@ -26,7 +27,7 @@ export default () => describe('readDatabase', () => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
       const count = await db.find(dbCard)(cond, {
-        count: 'COUNT(*)',
+        count: new SqlFunction('COUNT (*)'),
       })
       assert(count[0].count > 0)
 

@@ -1,6 +1,7 @@
 import assert from 'assert'
 
 import { db, dbCard } from './0-create'
+import { SqlFunction } from '../../src'
 
 export default () => describe('deleteDatabase', () => {
   ;[
@@ -15,9 +16,9 @@ export default () => describe('deleteDatabase', () => {
     it(JSON.stringify(cond), async () => {
       await db.delete(dbCard)(cond)
       const r = await db.find(dbCard)(cond, {
-        id: 'ROWID',
+        count: new SqlFunction('COUNT (*)'),
       })
-      assert(r.length === 0)
+      assert(r[0].count === 0)
     })
   })
 })

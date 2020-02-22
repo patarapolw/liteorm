@@ -4,7 +4,7 @@ import Emittery from 'emittery'
 
 import { Table, ISql, Column } from './table'
 import { parseCond } from './find'
-import { safeColumnName, SafeIds } from './utils'
+import { safeColumnName, SafeIds, SqlFunction } from './utils'
 
 export class Db extends Emittery.Typed<{
   'pre-find': {
@@ -16,7 +16,7 @@ export class Db extends Emittery.Typed<{
       to: Column | Table<any>
     }[]
     select: {
-      [alias: string]: string | Column
+      [alias: string]: string | SqlFunction | Column
     }
     options: {
       postfix?: string
@@ -68,7 +68,7 @@ export class Db extends Emittery.Typed<{
     return async <
       SqlOnly extends boolean = false,
       Select extends {
-        [alias: string]: string | Column
+        [alias: string]: string | SqlFunction | Column
       } = typeof table0['c'],
       R = SqlOnly extends true ? {
         sql: ISql
@@ -104,7 +104,7 @@ export class Db extends Emittery.Typed<{
           const k = col instanceof Column ? `${col.tableName}.${col.name}` : col
           const a = alias || (col instanceof Column ? `${col.tableName}__${col.name}` : col)
           return [a, {
-            key: k,
+            key: k instanceof SqlFunction ? k.content : k,
             column: col instanceof Column ? col : undefined,
           }]
         }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
