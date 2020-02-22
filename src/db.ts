@@ -67,15 +67,18 @@ export class Db extends Emittery.Typed<{
 
     return async <
       SqlOnly extends boolean = false,
+      Select extends {
+        [alias: string]: string | Column
+      } = typeof table0['c'],
       R = SqlOnly extends true ? {
         sql: ISql
         bindings: SafeIds
-      } : Record<string, any>[]
+      } : {
+        [K in keyof Select]: Select[K] extends Column<infer T> ? T : any
+      }[],
     >(
       qCond: Record<string, any>,
-      select: {
-        [alias: string]: string | Column
-      } | '*',
+      select: Select | '*',
       options: {
         postfix?: string
         sort?: {
@@ -88,13 +91,10 @@ export class Db extends Emittery.Typed<{
       sqlOnly?: SqlOnly,
     ): Promise<R> => {
       const tablesArray = tables.map((t) => t instanceof Table ? { to: t } : t)
-      if (select === '*') {
-        select = table0.c
-      }
 
       await this.emit('pre-find', {
         cond: qCond,
-        select,
+        select: select === '*' ? table0.c : select,
         tables: tablesArray,
         options: options || {},
       })
@@ -158,7 +158,7 @@ export class Db extends Emittery.Typed<{
               return [
                 `${t.type || 'INNER'} JOIN ${safeColumnName(toTable.m.__meta.name)}`,
                 'ON',
-                t.cond,
+                `(${t.cond})`,
               ].join(' ')
             } else {
               return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.m.__meta.name)}`
