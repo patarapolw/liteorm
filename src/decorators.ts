@@ -53,7 +53,7 @@ export function prop<
   default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
-  transform?: Partial<ITransformer<any>>
+  transform?: Partial<ITransformer<T>>
 } = {}): PropertyDecorator {
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)
@@ -183,7 +183,7 @@ export interface IPropRow<
   default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
-  transform?: Partial<ITransformer<any>>
+  transform?: Partial<ITransformer<T>>
 }
 
 export interface ISqliteMeta<T> {
