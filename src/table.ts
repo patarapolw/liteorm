@@ -83,8 +83,7 @@ export class Table<
       (this.m.__meta.prop as any).updatedAt = {
         type: 'Date',
         null: false,
-        default: () => new Date(),
-        onUpdate: () => new Date(),
+        onChange: () => new Date(),
       }
     }
 
@@ -108,11 +107,21 @@ export class Table<
 
     Object.entries(this.m.__meta.prop).map(([k, v]) => {
       if (v) {
-        const { onUpdate } = v as any
+        const { onChange, onUpdate } = v
 
-        if (onUpdate) {
+        if (onChange !== undefined) {
+          const fn = onChange
+
+          this.on('pre-create', async ({ entry }) => {
+            (entry as any)[k] = (entry as any)[k] || (typeof fn === 'function' ? await fn(entry) : fn)
+          })
+        }
+
+        if (onUpdate !== undefined || onChange !== undefined) {
+          const fn = onUpdate !== undefined ? onUpdate : onChange
+
           this.on('pre-update', async ({ set }) => {
-            (set as any)[k] = (set as any)[k] || (typeof onUpdate === 'function' ? await onUpdate(set) : v)
+            (set as any)[k] = (set as any)[k] || (typeof fn === 'function' ? await fn(set) : fn)
           })
         }
       }

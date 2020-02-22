@@ -12,6 +12,7 @@ export function primary<
   autoincrement?: boolean
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  onChange?: T | ((entry: Entry) => T | Promise<T>)
 } = {}): PropertyDecorator {
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)
@@ -31,6 +32,7 @@ export function primary<
       autoincrement,
       default: autoincrement ? undefined : params.default,
       onUpdate: params.onUpdate,
+      onChange: params.onChange,
     }
 
     Reflect.defineMetadata('sqlite:primary', primary, target)
@@ -50,6 +52,7 @@ export function prop<
   references?: string | Table<any> | { table: Table<any>; key: string }
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<any>>
 } = {}): PropertyDecorator {
   return function (target, key) {
@@ -89,6 +92,7 @@ export function prop<
       references,
       default: params.default ? params.default : undefined,
       onUpdate: params.onUpdate,
+      onChange: params.onChange,
       transform: params.transform,
     } as IPropRow<T, Entry>
 
@@ -163,6 +167,7 @@ export interface IPrimaryRow<
   autoincrement: boolean
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  onChange?: T | ((entry: Entry) => T | Promise<T>)
 }
 
 export interface IPropRow<
@@ -177,6 +182,7 @@ export interface IPropRow<
   references?: string
   default?: T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
+  onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<any>>
 }
 
