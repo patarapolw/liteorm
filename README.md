@@ -18,7 +18,7 @@ A simple wrapper for [sqlite](https://www.npmjs.com/package/sqlite); with typing
 
 ## Usage
 
-Please see [/tests/suites](https://github.com/patarapolw/liteorm/tree/master/tests/suites)
+Please see [/tests/suites](https://github.com/patarapolw/liteorm/tree/master/tests/suites) and [ankisync.js](https://github.com/patarapolw/ankisync.js)
 
 ## Installation
 
