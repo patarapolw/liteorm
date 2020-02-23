@@ -21,7 +21,7 @@ export class Db extends Emittery.Typed<{
     options: {
       postfix?: string
       sort?: {
-        key: Column
+        key: Column | string
         desc?: boolean
       }
       offset?: number
@@ -82,7 +82,7 @@ export class Db extends Emittery.Typed<{
       options: {
         postfix?: string
         sort?: {
-          key: Column
+          key: Column | string
           desc?: boolean
         }
         offset?: number
@@ -125,7 +125,7 @@ export class Db extends Emittery.Typed<{
       const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
         postfix.push(`ORDER BY ${safeColumnName(
-          `${options.sort.key.tableName}.${options.sort.key.name}`,
+          typeof options.sort.key === 'string' ? options.sort.key : `${options.sort.key.tableName}.${options.sort.key.name}`,
         )} ${options.sort.desc ? 'DESC' : 'ASC'}`)
       }
       if (options.limit) {
@@ -201,7 +201,7 @@ export class Db extends Emittery.Typed<{
       options: {
         postfix?: string
         sort?: {
-          key: Column
+          key: Column | string
           desc?: boolean
         }
         offset?: number
@@ -246,7 +246,7 @@ export class Db extends Emittery.Typed<{
       options: {
         postfix?: string
         sort?: {
-          key: Column
+          key: Column | string
           desc?: boolean
         }
         offset?: number
@@ -276,7 +276,7 @@ export class Db extends Emittery.Typed<{
       options: {
         postfix?: string
         sort?: {
-          key: Column
+          key: Column | string
           desc?: boolean
         }
         offset?: number
