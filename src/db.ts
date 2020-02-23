@@ -99,19 +99,18 @@ export class Db extends Emittery.Typed<{
         options: options || {},
       })
 
-      const selectDict = (select && typeof select === 'object')
-        ? Object.entries(select).map(([alias, col]) => {
-          const k = col instanceof Column ? `${col.tableName}.${col.name}` : col
-          const a = alias || (col instanceof Column ? `${col.tableName}__${col.name}` : col)
-          return [a, {
-            key: k instanceof SqlFunction ? k.content : k,
-            column: col instanceof Column ? col : undefined,
-          }]
-        }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
-          key: string
-          column?: Column
-        }>)
-        : null
+      const selectDict = Object.entries(
+        select === '*' ? table0.c : select,
+      ).map(([alias, col]) => {
+        const k = col instanceof Column ? `${col.tableName}.${col.name}` : col
+        return [alias, {
+          key: k instanceof SqlFunction ? k.content : k,
+          column: col instanceof Column ? col : undefined,
+        }]
+      }).reduce((prev, [a, k]: any[]) => ({ ...prev, [a]: k }), {} as Record<string, {
+        key: string
+        column?: Column
+      }>)
 
       const tableRecord: Record<string, Table<any>> = [
         table0,
