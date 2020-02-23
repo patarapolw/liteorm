@@ -2,7 +2,11 @@ import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
 import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators'
-import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds, SqlFunction } from './utils'
+import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds, SqlFunction, isNullOrUndefined } from './utils'
+
+export type UndefinedEqNull<E> = {
+  [K in keyof E]: E[K] | (undefined extends E[K] ? null : never)
+}
 
 export interface ISql {
   $statement: string
@@ -39,7 +43,7 @@ export class Table<
 > extends Emittery.Typed<{
   'build-sql': ISql
   'pre-create': {
-    entry: E
+    entry: UndefinedEqNull<E>
     options: {
       postfix: string[]
     }
@@ -47,7 +51,7 @@ export class Table<
   'create-sql': ISql
   'pre-update': {
     sql: ISql
-    set: Partial<E>
+    set: Partial<UndefinedEqNull<E>>
   }
   'update-sql': ISql
   'pre-delete': {
@@ -113,7 +117,9 @@ export class Table<
           const fn = def || onChange
 
           this.on('pre-create', async ({ entry }) => {
-            (entry as any)[k] = (entry as any)[k] || (typeof fn === 'function' ? await fn(entry) : fn)
+            if (isNullOrUndefined((entry as any)[k])) {
+              (entry as any)[k] = typeof fn === 'function' ? await fn(entry) : fn
+            }
           })
         }
 
@@ -121,7 +127,12 @@ export class Table<
           const fn = onUpdate !== undefined ? onUpdate : onChange
 
           this.on('pre-update', async ({ set }) => {
-            (set as any)[k] = (set as any)[k] || (typeof fn === 'function' ? await fn(set) : fn)
+            /**
+             * NULL should be able to set SQLite row to BLANK
+             */
+            if ((set as any)[k] === undefined) {
+              (set as any)[k] = typeof fn === 'function' ? await fn(set) : fn
+            }
           })
         }
       }
@@ -133,9 +144,11 @@ export class Table<
       default?: any
       type?: keyof typeof AliasToSqliteType
     }) => {
-      const def = !['undefined', 'function'].includes(typeof v.default) ? this.transform(k, 'set')(v.default) : v.default
+      const def = (v.default === undefined || typeof v.default === 'function')
+        ? this.transform(k, 'set')(v.default)
+        : v.default
 
-      if (typeof def === 'undefined') {
+      if (isNullOrUndefined(def)) {
         return ''
       } else if (def instanceof SqlFunction) {
         return `DEFAULT ${def.content}`
@@ -254,7 +267,7 @@ export class Table<
   }
 
   create (db: sqlite.Database): (
-    entry: E,
+    entry: UndefinedEqNull<E>,
     options?: {
       postfix?: string
       ignoreErrors?: boolean

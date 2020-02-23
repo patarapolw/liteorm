@@ -92,19 +92,19 @@ export async function createDatabase (filename: string = 'tests/test.db') {
             _id: ids.pop(),
             isCool: faker.random.arrayElement([true, false]),
             v2b: faker.random.number(5) === 0
-              ? undefined
+              ? faker.random.arrayElement([null, undefined])
               : Array.from({ length: faker.random.number(5) })
                 .map(() => faker.random.arrayElement(['is', 'am', 'are', 'was', 'were'])),
             noteId,
             front: faker.lorem.sentences(),
             back: faker.random.number(5) === 0
-              ? undefined
+              ? faker.random.arrayElement([null, undefined])
               : faker.lorem.sentences(),
             nextReview: faker.random.number(5) === 0
-              ? undefined
+              ? faker.random.arrayElement([null, undefined])
               : faker.date.between(new Date(2000, 1), new Date(2030, 12)),
             stat: faker.random.number(5) === 0
-              ? undefined
+              ? faker.random.arrayElement([null, undefined])
               : {
                 streak: {
                   right: faker.random.number(10),

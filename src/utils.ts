@@ -311,3 +311,10 @@ bool: boolean // Boolean
 export function normalizeAlias (k: keyof AliasToJSType): SqliteAllTypes {
   return normalizer[k] || k
 }
+
+export function isNullOrUndefined (a: any): a is null | undefined {
+  if (a === null || a === undefined) {
+    return true
+  }
+  return false
+}

@@ -2,7 +2,7 @@ import 'bluebird-global'
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
 
-import { Table, ISql, Column } from './table'
+import { Table, ISql, Column, UndefinedEqNull } from './table'
 import { parseCond } from './find'
 import { safeColumnName, SafeIds, SqlFunction } from './utils'
 
@@ -73,9 +73,9 @@ export class Db extends Emittery.Typed<{
       R = SqlOnly extends true ? {
         sql: ISql
         bindings: SafeIds
-      } : {
+      } : UndefinedEqNull<{
         [K in keyof Select]: Select[K] extends Column<infer T> ? T : any
-      }[],
+      }>[],
     >(
       qCond: Record<string, any>,
       select: Select | '*',
