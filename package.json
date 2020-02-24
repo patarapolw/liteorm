@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.7.18",
+  "version": "0.8.0",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -28,6 +28,7 @@
     "bluebird-global": "^1.0.1",
     "emittery": "^0.4.1",
     "reflect-metadata": "^0.1.13",
+    "sql-template-strings": "^2.2.2",
     "sqlite": "^3.0.3"
   },
   "devDependencies": {
