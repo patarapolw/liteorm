@@ -1,16 +1,13 @@
 import sqlite from 'sqlite'
 import Emittery from 'emittery'
+import { SQLStatement } from 'sql-template-strings'
 
 import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators'
-import { SqliteExt, AliasToSqliteType, safeColumnName, SafeIds, SqlFunction, isNullOrUndefined } from './utils'
+import { SqliteExt, AliasToSqliteType, isNullOrUndefined, safeColumnName } from './utils'
+import { SQL, joinSQL } from './compat/sql-template-strings'
 
 export type UndefinedEqNull<E> = {
   [K in keyof E]: E[K] | (undefined extends E[K] ? null : never)
-}
-
-export interface ISql {
-  $statement: string
-  $params: Record<string, any>
 }
 
 export interface ITransformer<T> {
@@ -41,23 +38,23 @@ export class Table<
   AdditionalProps extends { ROWID?: number; createdAt?: Date; updatedAt?: Date } = {},
   E extends M & AdditionalProps = M & AdditionalProps
 > extends Emittery.Typed<{
-  'build-sql': ISql
+  'build-sql': SQLStatement
   'pre-create': {
     entry: UndefinedEqNull<E>
     options: {
-      postfix: string[]
+      postfix: SQLStatement[]
     }
   }
-  'create-sql': ISql
+  'create-sql': SQLStatement
   'pre-update': {
-    sql: ISql
+    sql: SQLStatement
     set: Partial<UndefinedEqNull<E>>
   }
-  'update-sql': ISql
+  'update-sql': SQLStatement
   'pre-delete': {
-    sql: ISql
+    sql: SQLStatement
   }
-  'delete-sql': ISql
+  'delete-sql': SQLStatement
 }> {
   c: Required<{
     [K in keyof E]: Column<E[K]>
@@ -144,124 +141,105 @@ export class Table<
       default?: any
       type?: keyof typeof AliasToSqliteType
     }) => {
-      const def = (v.default === undefined || typeof v.default === 'function')
-        ? this.transform(k, 'set')(v.default)
-        : v.default
-
-      if (isNullOrUndefined(def)) {
-        return ''
-      } else if (def instanceof SqlFunction) {
-        return `DEFAULT ${def.content}`
-      } else if (typeof def === 'string') {
-        return `DEFAULT '${def.replace(/'/g, "[']")}'`
-      } else if (typeof def === 'number') {
-        return `DEFAULT ${def}`
-      } else if (typeof def === 'boolean') {
-        return `DEFAULT ${def ? 1 : 0}`
-      } else if (typeof v.default === 'function') {
-        return ''
+      if (isNullOrUndefined(v.default)) {
+        return SQL()
+      } else if (v.default instanceof SQLStatement) {
+        return SQL`DEFAULT ${v.default}`
+      } else if (typeof v.default === 'string') {
+        return SQL(`DEFAULT '${v.default.replace(/'/, "[']")}'`)
+      } else if (typeof v.default === 'number') {
+        return SQL(`DEFAULT ${v.default}`)
+      } else if (typeof v.default === 'boolean') {
+        return SQL(`DEFAULT ${v.default ? 1 : 0}`)
       }
 
-      return ''
+      return SQL()
     }
 
-    const col: string[] = []
+    const cols = [] as SQLStatement[]
 
     if (this.m.__meta.primary && this.m.__meta.primary.type) {
-      col.push([
+      cols.push(joinSQL([
         safeColumnName(this.m.__meta.primary.name as string),
         AliasToSqliteType[this.m.__meta.primary.type as keyof typeof AliasToSqliteType] || 'INTEGER',
         'PRIMARY KEY',
-        this.m.__meta.primary.autoincrement ? 'AUTOINCREMENT' : '',
+        ...(this.m.__meta.primary.autoincrement ? [
+          'AUTOINCREMENT',
+        ] : []),
         getDefault(this.m.__meta.primary.name as string, this.m.__meta.primary),
-      ].join(' '))
+      ], ' '))
     }
 
     for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.type) {
-        col.push([
+        cols.push(joinSQL([
           safeColumnName(k),
           AliasToSqliteType[v.type as keyof typeof AliasToSqliteType] || 'TEXT',
-          v.null ? '' : 'NOT NULL',
+          ...(v.null ? [] : [
+            'NOT NULL',
+          ]),
           getDefault(k, v),
-          v.references ? `REFERENCES ${safeColumnName(v.references)}` : '',
-        ].join(' '))
+          ...(v.references ? [
+            `REFERENCES ${safeColumnName(v.references)}`,
+          ] : []),
+        ], ' '))
       }
     }
 
     if (this.m.__meta.primary && Array.isArray(this.m.__meta.primary.name)) {
-      col.push([
-        'PRIMARY KEY',
-        `(${this.m.__meta.primary.name.map((k) => safeColumnName(k as string)).join(',')})`,
-      ].join(' '))
+      cols.push(SQL`PRIMARY KEY (${
+        joinSQL(this.m.__meta.primary.name.map((k) => safeColumnName(k)), ',')
+      })`)
     }
 
     if (this.m.__meta.unique && this.m.__meta.unique.length > 0) {
       this.m.__meta.unique.forEach((ss) => {
-        col.push([
-          'UNIQUE',
-          ss.name,
-          `(${ss.keys.map((k) => safeColumnName(k as string)).join(',')})`,
-        ].join(' '))
+        cols.push(SQL`UNIQUE ${ss.name} (${
+          joinSQL(ss.keys.map((k) => safeColumnName(k as string)), ',')
+        })`)
       })
     }
 
     for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.unique) {
-        col.push([
-          'CONSTRAINT',
-          v.unique,
-          'UNIQUE',
-          `(${safeColumnName(k)})`,
-        ].join(' '))
+        cols.push(SQL`CONSTRAINT ${
+          SQL(safeColumnName(v.unique))
+        } UNIQUE (${
+          SQL(safeColumnName(k))
+        })`)
       }
     }
 
-    const sql: ISql = {
-      $statement: [
-        'CREATE TABLE IF NOT EXISTS',
-        safeColumnName(this.m.__meta.name),
-        `(${col.join(',')})`,
-      ].join(' '),
-      $params: [],
-    }
+    const sql = SQL`CREATE TABLE IF NOT EXISTS ${
+      SQL(safeColumnName(this.m.__meta.name))
+    } (${joinSQL(cols, ',')})`
 
     await this.emit('build-sql', sql)
-    await db.exec(sql.$statement)
+    await db.run(sql)
 
     if (this.m.__meta.index) {
       await Promise.all(this.m.__meta.index.map(async (idx) => {
-        const sql: ISql = {
-          $statement: [
-            'CREATE INDEX IF NOT EXISTS',
-            idx.name,
-            'ON',
-            `${safeColumnName(this.m.__meta.name)}`,
-            `(${idx.keys.map((k) => safeColumnName(String(k))).join(',')})`,
-          ].join(' '),
-          $params: [],
-        }
-
+        const sql = SQL`CREATE INDEX IF NOT EXISTS ${
+          SQL(safeColumnName(idx.name))
+        } ON ${this.m.__meta.name} (${
+          joinSQL(idx.keys.map((k) => SQL(safeColumnName(k as string))), ',')
+        })`
         await this.emit('build-sql', sql)
-        await db.exec(sql.$statement)
+        await db.run(sql)
       }))
     }
 
     for (const [k, v] of Object.entries<IPropRow>(this.m.__meta.prop as any)) {
       if (v && v.index) {
-        const sql: ISql = {
-          $statement: [
-            'CREATE INDEX IF NOT EXISTS',
-            v.index,
-            'ON',
-            `${safeColumnName(this.m.__meta.name)}`,
-            `(${safeColumnName(k)})`,
-          ].join(' '),
-          $params: [],
-        }
-
+        const sql = SQL`CREATE INDEX IF NOT EXISTS ${
+          SQL(safeColumnName(v.index))
+        } ON ${
+          SQL(safeColumnName(this.m.__meta.name))
+        } (${
+          SQL(safeColumnName(k))
+        })`
         await this.emit('build-sql', sql)
-        await db.exec(sql.$statement)
+        await db.run(sql)
       }
     }
   }
@@ -269,44 +247,39 @@ export class Table<
   create (db: sqlite.Database): (
     entry: UndefinedEqNull<E>,
     options?: {
-      postfix?: string
+      postfix?: SQLStatement
       ignoreErrors?: boolean
     },
   ) => Promise<number> {
-    const bindings = new SafeIds()
-
     return async (entry, options = {}) => {
       const postfix = options.postfix ? [options.postfix] : []
 
       if (options.ignoreErrors) {
-        postfix.push('ON CONFLICT DO NOTHING')
+        postfix.push(SQL`ON CONFLICT DO NOTHING`)
       }
 
       await this.emit('pre-create', { entry, options: { postfix } })
 
-      const bracketed: string[] = []
-      const values: Record<string, any> = {}
+      const keys: string[] = []
+      const values: any[] = []
 
-      for (let [k, v] of Object.entries(entry)) {
+      for (const [k, v] of Object.entries(entry)) {
         if (typeof v !== 'undefined') {
-          v = this.transform(k, 'set')(v)
-          bracketed.push(k)
-          Object.assign(values, { [bindings.pop()]: v })
+          keys.push(k)
+          values.push(this.transform(k, 'set')(v))
         }
       }
 
-      const sql = {
-        $statement: [
-          `INSERT INTO ${safeColumnName(this.m.__meta.name)}`,
-          `(${bracketed.map(safeColumnName).join(',')})`,
-          `VALUES (${Object.keys(values).join(',')})`,
-          ...postfix,
-        ].join(' '),
-        $params: values,
-      }
+      const sql = SQL`INSERT INTO ${
+        SQL(safeColumnName(this.m.__meta.name))
+      } (${
+        joinSQL(keys.map((k) => safeColumnName(k)), ',')
+      }) VALUES (${joinSQL(values.map((v) => SQL`${v}`), ',')}) ${
+        joinSQL(postfix, ' ')
+      }`
 
       await this.emit('create-sql', sql)
-      const r = await db.run(sql.$statement, sql.$params)
+      const r = await db.run(sql)
 
       return r.lastID
     }
@@ -314,59 +287,42 @@ export class Table<
 
   __updateBySql (db: sqlite.Database) {
     return async (
-      sql: ISql,
+      sql: SQLStatement,
       set: Partial<E>,
-      bindings: SafeIds,
     ) => {
       await this.emit('pre-update', { sql, set })
 
-      const setK: string[] = []
-      const setV: Record<string, any> = {}
+      const setSql: SQLStatement[] = []
 
-      for (let [k, v] of Object.entries<any>(set)) {
+      for (const [k, v] of Object.entries<any>(set)) {
         if (typeof v !== 'undefined') {
-          v = this.transform(k, 'set')(v)
-          const id = bindings.pop()
-          setK.push(`${k} = ${id}`)
-          setV[id] = v
+          setSql.push(SQL`${SQL(safeColumnName(k))} = ${this.transform(k, 'set')(v)}`)
         }
       }
 
-      sql = {
-        $statement: [
-          `UPDATE ${safeColumnName(this.name)}`,
-          `SET ${setK.map(safeColumnName).join(',')}`,
-          `WHERE ${safeColumnName(this.primaryKey)}`,
-          'IN',
-          `(${sql.$statement})`,
-        ].join(' '),
-        $params: {
-          ...setV,
-          ...sql.$params,
-        },
-      }
+      const resultSql = SQL`UPDATE ${
+        SQL(safeColumnName(this.name))
+      } SET ${joinSQL(setSql, ',')} WHERE ${
+        SQL(safeColumnName(this.primaryKey))
+      } IN (${sql})`
 
-      await this.emit('update-sql', sql)
-      await db.run(sql.$statement, sql.$params)
+      await this.emit('update-sql', resultSql)
+      await db.run(resultSql)
     }
   }
 
   __deleteBySql (db: sqlite.Database) {
-    return async (sql: ISql): Promise<void> => {
+    return async (sql: SQLStatement): Promise<void> => {
       await this.emit('pre-delete', { sql })
 
-      sql = {
-        $statement: [
-          `DELETE FROM ${safeColumnName(this.name)}`,
-          `WHERE ${safeColumnName(this.primaryKey)}`,
-          'IN',
-          `(${sql.$statement})`,
-        ].join(' '),
-        $params: sql.$params,
-      }
+      const resultSql = SQL`DELETE FROM ${
+        SQL(safeColumnName(this.name))
+      } WHERE ${
+        SQL(safeColumnName(this.primaryKey))
+      } IN (${sql})`
 
-      await this.emit('delete-sql', sql)
-      await db.run(sql.$statement, sql.$params)
+      await this.emit('delete-sql', resultSql)
+      await db.run(resultSql)
     }
   }
 

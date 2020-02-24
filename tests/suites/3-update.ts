@@ -20,7 +20,7 @@ export default () => describe('updateDatabase', () => {
         front: dbCard.c.front,
       })
 
-      assert(r.every((r0) => r0.front === 'NoNUM'))
+      assert((await r.all()).every((r0) => r0.front === 'NoNUM'))
 
       // db.cols.card.off('update', console.log)
     })

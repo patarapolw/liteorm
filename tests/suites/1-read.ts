@@ -1,7 +1,8 @@
 import assert from 'assert'
 
+import SQL from 'sql-template-strings'
+
 import { db, dbCard } from './0-create'
-import { SqlFunction } from '../../src'
 
 export default () => describe('readDatabase', () => {
   ;[
@@ -26,27 +27,27 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const count = await db.find(dbCard)(cond, {
-        count: new SqlFunction('COUNT (*)'),
+      const r = await db.find(dbCard)(cond, {
+        count: SQL`COUNT (*)`,
       })
-      assert(count[0].count > 0)
+      assert((await r.first()).count > 0)
 
-      const result = await db.find(dbCard)(cond, {
-        front: dbCard.c.front,
-        stat: dbCard.c.stat,
-        nextReview: dbCard.c.nextReview,
-        isCool: dbCard.c.isCool,
-        v2b: dbCard.c.v2b,
-      }, {
-        sort: {
-          key: dbCard.c.front,
-          desc: true,
-        },
-        offset: 10,
-        limit: 5,
-      })
+      // const result = await db.find(dbCard)(cond, {
+      //   front: dbCard.c.front,
+      //   stat: dbCard.c.stat,
+      //   nextReview: dbCard.c.nextReview,
+      //   isCool: dbCard.c.isCool,
+      //   v2b: dbCard.c.v2b,
+      // }, {
+      //   sort: {
+      //     key: dbCard.c.front,
+      //     desc: true,
+      //   },
+      //   offset: 10,
+      //   limit: 5,
+      // })
 
-      console.dir(result, { depth: null })
+      // console.dir(await result.all(), { depth: null })
 
       // db.cols.card.off('find', console.log)
     })

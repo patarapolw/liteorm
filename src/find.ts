@@ -1,81 +1,54 @@
-import { Table, ISql } from './table'
-import { safeColumnName, SafeIds } from './utils'
+import { SQLStatement } from 'sql-template-strings'
+
+import { Table } from './table'
+import { safeColumnName } from './utils'
 import { IPropRow } from './decorators'
+import { joinSQL, SQL } from './compat/sql-template-strings'
 
 /**
  *
  * @param q
  * @param cols
- * @param getFreeBinding Can be generated via '@/utils#SafeIds'
  */
 export function parseCond (
   q: Record<string, any>,
   cols: Record<string, Table<any>>,
-  safeIds: SafeIds,
-): ISql {
-  if (q.$statement) {
-    return {
-      $statement: q.$statement,
-      $params: q.$params || {},
-    }
-  }
-
-  const subClause: string[] = []
-  const $params: Record<string, any> = {}
+): SQLStatement {
+  const subClause: SQLStatement[] = []
 
   if (Array.isArray(q.$or)) {
-    const c = q.$or.map((el) => {
-      const r = parseCond(el, cols, safeIds)
-      Object.assign($params, r.$params)
-
-      return r.$statement
-    }).join(' OR ')
-
-    subClause.push(`(${c})`)
+    subClause.push(SQL`(${
+      joinSQL(q.$or.map((el) => parseCond(el, cols)), ' OR ')
+    })`)
   } else if (Array.isArray(q.$and)) {
-    const c = q.$and.map((el) => {
-      const r = parseCond(el, cols, safeIds)
-      Object.assign($params, r.$params)
-
-      return r.$statement
-    }).join(' AND ')
-
-    subClause.push(`(${c})`)
+    subClause.push(SQL`(${
+      joinSQL(q.$and.map((el) => parseCond(el, cols)), ' AND ')
+    })`)
   } else {
-    const r = _parseCondBasic(q, cols, safeIds)
-
-    subClause.push(`(${r.$statement})`)
-    Object.assign($params, r.$params)
+    subClause.push(SQL`(${
+      _parseCondBasic(q, cols)
+    })`)
   }
 
-  return {
-    $statement: subClause.join(' AND ') || 'TRUE',
-    $params,
+  if (subClause.length > 1) {
+    return SQL`(${joinSQL(subClause, ' AND ')})`
+  } else if (subClause.length === 1) {
+    return subClause[0]
   }
+  return SQL`TRUE`
 }
 
 function _parseCondBasic (
   cond: Record<string, any>,
   cols: Record<string, Table<any>>,
-  safeIds: SafeIds,
-): ISql {
-  if (cond.$statement) {
-    return {
-      $statement: cond.$statement,
-      $params: cond.$params || [],
-    }
-  }
+): SQLStatement {
+  const cList: SQLStatement[] = []
 
-  const cList: string[] = []
-  const $params: Record<string, any> = {}
-
-  function doDefault (k: string, v: any, id: string) {
+  function doDefault (k: string, v: any) {
     if (strArrayCols.includes(k)) {
-      Object.assign($params, { [id]: v })
-      cList.push(`${k} LIKE '%\x1f'||${id}||'\x1f%'`)
+      cList.push(SQL`${SQL(k)} LIKE '%\x1f'||${v}||'\x1f%'`)
     } else {
-      Object.assign($params, { [id]: v })
-      cList.push(`${k} = ${id}`)
+      cList.push(SQL`${SQL(k)} = ${v}`)
     }
   }
 
@@ -106,23 +79,17 @@ function _parseCondBasic (
     if (v) {
       if (Array.isArray(v)) {
         if (isStrArray) {
-          cList.push(`(${(v.map((v0) => {
-            const id = safeIds.pop()
-            Object.assign($params, { [id]: v0 })
-            return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
-          })).join(' AND ')})`)
+          cList.push(SQL`(${joinSQL((v.map((v0) => {
+            return SQL`${SQL(k)} LIKE '%\x1f'||${v0}||'\x1f%'`
+          })), ' AND ')})`)
         } else {
           if (v.length > 1) {
-            const vObj = v.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
-            cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
-            Object.assign($params, vObj)
+            cList.push(SQL`${SQL(k)} IN (${joinSQL(v.map((v0) => SQL`${v0}`), ',')})`)
           } else if (v.length === 1) {
-            const id = safeIds.pop()
-            cList.push(`${k} = ${id}`)
-            Object.assign($params, { [id]: v[0] })
+            cList.push(SQL`${SQL(k)} = ${v[0]}`)
           }
         }
-      } else if (typeof v === 'object' && v.toString() === '[object Object]') {
+      } else if (typeof v === 'object' && v.constructor === Object) {
         const op = Object.keys(v)[0]
         let v1 = v[op]
         if (v1 instanceof Date) {
@@ -133,33 +100,23 @@ function _parseCondBasic (
           switch (op) {
             case '$in':
               if (isStrArray) {
-                cList.push(`(${(v1.map((v0) => {
-                  const id = safeIds.pop()
-                  Object.assign($params, { [id]: v0 })
-                  return `${k} LIKE '%\x1f'||${id}||'\x1f%'`
-                })).join(' OR ')})`)
+                cList.push(SQL`(${joinSQL(v1.map((v0) => {
+                  return SQL`${SQL(k)} LIKE '%\x1f'||${v0}||'\x1f%'`
+                }), ' OR ')})`)
               } else {
                 if (v1.length > 1) {
-                  const vObj = v1.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
-                  cList.push(`${k} IN (${Object.keys(vObj).join(',')})`)
-                  Object.assign($params, vObj)
+                  cList.push(SQL`${SQL(k)} IN (${joinSQL(v1.map((v0) => SQL`${v0}`), ',')})`)
                 } else if (v1.length === 1) {
-                  const id = safeIds.pop()
-                  cList.push(`${k} = ${id}`)
-                  Object.assign($params, { [id]: v1[0] })
+                  cList.push(SQL`${SQL(k)} = ${v1[0]}`)
                 }
               }
               isPushed = true
               break
             case '$nin':
               if (v1.length > 1) {
-                const vObj = v1.reduce((prev, c) => ({ ...prev, [safeIds.pop()]: c }), {})
-                cList.push(`${k} NOT IN (${Object.keys(vObj).join(',')})`)
-                Object.assign($params, vObj)
+                cList.push(SQL`${SQL(k)} NOT IN (${joinSQL(v1.map((v0) => SQL`${v0}`), ',')})`)
               } else {
-                const id = safeIds.pop()
-                cList.push(`${k} != ${id}`)
-                Object.assign($params, { [id]: v1[0] })
+                cList.push(SQL`${SQL(k)} != ${v1[0]}`)
               }
               isPushed = true
               break
@@ -179,62 +136,52 @@ function _parseCondBasic (
           }
         }
 
-        const id = safeIds.pop()
         switch (op) {
           case '$like':
-            cList.push(`${k} LIKE ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} LIKE ${v1}`)
             break
           case '$nlike':
-            cList.push(`${k} NOT LIKE ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} NOT LIKE ${v1}`)
             break
           case '$substr':
-            cList.push(`${k} LIKE '%'||${id}||'%'`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} LIKE '%'||${v1}||'%'`)
             break
           case '$nsubstr':
-            cList.push(`${k} NOT LIKE '%'||${id}||'%'`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} NOT LIKE '%'||${v1}||'%'`)
             break
           case '$exists':
-            cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'}`)
+            cList.push(SQL`${SQL(k)} IS ${SQL(v1 ? 'NOT NULL' : 'NULL')}`)
             break
           case '$gt':
-            cList.push(`${k} > ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} > ${v1}`)
             break
           case '$gte':
-            cList.push(`${k} >= ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} >= ${v1}`)
             break
           case '$lt':
-            cList.push(`${k} < ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} < ${v1}`)
             break
           case '$lte':
-            cList.push(`${k} <= ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} <= ${v1}`)
             break
           case '$ne':
-            cList.push(`${k} != ${id}`)
-            Object.assign($params, { [id]: v1 })
+            cList.push(SQL`${SQL(k)} != ${v1}`)
             break
           default:
-            doDefault(k, v, id)
+            doDefault(k, v)
         }
       } else {
-        const id = safeIds.pop()
-        doDefault(k, v, id)
+        doDefault(k, v)
       }
     } else {
-      const id = safeIds.pop()
-      doDefault(k, v, id)
+      doDefault(k, v)
     }
   }
 
-  return {
-    $statement: cList.join(' AND ') || 'TRUE',
-    $params,
+  if (cList.length > 1) {
+    return SQL`(${joinSQL(cList, ' AND ')})`
+  } else if (cList.length === 1) {
+    return cList[0]
   }
+  return SQL`TRUE`
 }

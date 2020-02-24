@@ -4,7 +4,6 @@ import fs from 'fs'
 import faker from 'faker'
 
 import { Db, Table, primary, prop, Entity } from '../../src'
-import { SafeIds } from '../../src/utils'
 
 @Entity({ name: 'note', timestamp: true })
 class DbNote {
@@ -72,7 +71,7 @@ export async function createDatabase (filename: string = 'tests/test.db') {
     }
   }))
 
-  const ids = new SafeIds(5000)
+  const ids = new SafeIds()
 
   await Promise.all(Array.from({ length: 1000 }).map(async () => {
     try {
@@ -123,3 +122,17 @@ export async function createDatabase (filename: string = 'tests/test.db') {
 }
 
 export { _db as db }
+
+class SafeIds {
+  usedIds = new Set<number>()
+
+  pop () {
+    let id = Math.random()
+    while (this.usedIds.has(id)) {
+      id = Math.random()
+    }
+    this.usedIds.add(id)
+
+    return id.toString(36).substr(2)
+  }
+}

@@ -1,35 +1,128 @@
-export class SqlFunction {
-  constructor (public content: string) {}
-}
+import { SQLStatement } from 'sql-template-strings'
+
+import { SQL } from './compat/sql-template-strings'
 
 /**
- * Allow chars are
- * https://stackoverflow.com/questions/31788990/sqlite-what-are-the-restricted-characters-for-identifiers
- *
- * The number of bindings allowed at a time are 999.
- * https://www.sqlite.org/c3ref/bind_blob.html
- *
- * This is also a limit on satement length, but the number of bindings is more limiting.
- * https://www.sqlite.org/limits.html
+ * https://www.sqlite.org/datatype3.html
  */
-export class SafeIds {
-  ids: string[]
+export type SqliteNative = 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB'
+export type SqliteExt = 'Boolean' | 'Date' | 'JSON' | 'StringArray'
+export type SqliteAllTypes = SqliteNative | SqliteExt
 
-  constructor (count = 999) {
-    const ids = new Set<number>()
-    while (ids.size < count) {
-      ids.add(Math.random())
-    }
-    this.ids = Array.from(ids).map((id) => '$' + id.toString(36).substr(2))
-  }
+export const AliasToSqliteType: Record<string, SQLStatement> = {
+  /**
+   * Identity types
+   */
+  TEXT: SQL`TEXT`,
+  INTEGER: SQL`INTEGER`,
+  REAL: SQL`REAL`,
+  BLOB: SQL`BLOB`,
+  /**
+   * Class name types
+   */
+  String: SQL`TEXT`,
+  Number: SQL`REAL`,
+  Date: SQL`INTEGER`,
+  ArrayBuffer: SQL`BLOB`,
+  Boolean: SQL`INTEGER`,
+  Object: SQL`TEXT`,
+  /**
+   * Additional aliases
+   */
+  JSON: SQL`TEXT`,
+  StringArray: SQL`TEXT`,
+  str: SQL`TEXT`,
+  string: SQL`TEXT`,
+  int: SQL`INTEGER`,
+  integer: SQL`INTEGER`,
+  float: SQL`REAL`,
+  bin: SQL`BLOB`,
+  binary: SQL`BLOB`,
+  boolean: SQL`INTEGER`,
+  bool: SQL`INTEGER`,
+}
 
-  pop () {
-    const id = this.ids.pop()
-    if (!id) {
-      throw new Error('You use too many parameters. Please see SQLite\'s parameter count limit (999) here -- https://www.sqlite.org/c3ref/bind_blob.html')
+export interface AliasToJSType extends Record<keyof typeof AliasToSqliteType, any> {
+  /**
+   * Identity types
+   */
+  TEXT: string
+  INTEGER: number
+  REAL: number
+  BLOB: ArrayBuffer
+  /**
+   * Class name types
+   */
+  String: string // TEXT
+  Number: number // REAL
+  Date: Date
+  ArrayBuffer: ArrayBuffer // BLOB
+  Boolean: boolean
+  Object: Record<string, any> | any[] // JSON
+  /**
+   * Additional aliases
+   */
+  JSON: Record<string, any> | any[]
+  StringArray: string[]
+  str: string // TEXT
+  string: string // TEXT
+  int: number // INTEGER
+  integer: number // INTEGER
+  float: number // REAL
+  bin: ArrayBuffer // BLOB
+  binary: ArrayBuffer // BLOB
+  boolean: boolean // Boolean
+  bool: boolean // Boolean
+}
+
+const normalizer = `
+/**
+ * Class name types
+ */
+String: string // TEXT
+Number: number // REAL
+Date: Date
+ArrayBuffer: ArrayBuffer // BLOB
+Boolean: boolean
+Object: Record<string, any> | any[] // JSON
+/**
+ * Additional aliases
+ */
+JSON: Record<string, any> | any[]
+StringArray: string[]
+str: string // TEXT
+string: string // TEXT
+int: number // INTEGER
+integer: number // INTEGER
+float: number // REAL
+bin: ArrayBuffer // BLOB
+binary: ArrayBuffer // BLOB
+boolean: boolean // Boolean
+bool: boolean // Boolean
+  `.split('\n')
+  .map((r) => r.trim())
+  .map((r) => {
+    if (r) {
+      const m = /^(.+?):.+?\/\/ (.+)$/.exec(r)
+      if (m) {
+        return [m[1], m[2]]
+      }
     }
-    return id
+    return null
+  })
+  .filter((r) => r)
+  .map((r) => r as any[])
+  .reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {}) as Record<string, SqliteAllTypes>
+
+export function normalizeAlias (k: keyof AliasToJSType): SqliteAllTypes {
+  return normalizer[k] || k
+}
+
+export function isNullOrUndefined (a: any): a is null | undefined {
+  if (a === null || a === undefined) {
+    return true
   }
+  return false
 }
 
 /**
@@ -194,127 +287,4 @@ export function safeColumnName (s: string) {
   const kwRegex = new RegExp(`(^|[^${validIdToken}\\)])(${keywords.join('|')})($|[^${validIdToken}\\()])`, 'gi')
 
   return s.replace(kwRegex, '$1"$2"$3')
-}
-
-/**
- * https://www.sqlite.org/datatype3.html
- */
-export type SqliteNative = 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB'
-export type SqliteExt = 'Boolean' | 'Date' | 'JSON' | 'StringArray'
-export type SqliteAllTypes = SqliteNative | SqliteExt
-
-export const AliasToSqliteType = {
-  /**
-   * Identity types
-   */
-  TEXT: 'TEXT',
-  INTEGER: 'INTEGER',
-  REAL: 'REAL',
-  BLOB: 'BLOB',
-  /**
-   * Class name types
-   */
-  String: 'TEXT',
-  Number: 'REAL',
-  Date: 'INTEGER',
-  ArrayBuffer: 'BLOB',
-  Boolean: 'INTEGER',
-  Object: 'TEXT',
-  /**
-   * Additional aliases
-   */
-  JSON: 'TEXT',
-  StringArray: 'TEXT',
-  str: 'TEXT',
-  string: 'TEXT',
-  int: 'INTEGER',
-  integer: 'INTEGER',
-  float: 'REAL',
-  bin: 'BLOB',
-  binary: 'BLOB',
-  boolean: 'INTEGER',
-  bool: 'INTEGER',
-}
-
-export interface AliasToJSType extends Record<keyof typeof AliasToSqliteType, any> {
-  /**
-   * Identity types
-   */
-  TEXT: string
-  INTEGER: number
-  REAL: number
-  BLOB: ArrayBuffer
-  /**
-   * Class name types
-   */
-  String: string // TEXT
-  Number: number // REAL
-  Date: Date
-  ArrayBuffer: ArrayBuffer // BLOB
-  Boolean: boolean
-  Object: Record<string, any> | any[] // JSON
-  /**
-   * Additional aliases
-   */
-  JSON: Record<string, any> | any[]
-  StringArray: string[]
-  str: string // TEXT
-  string: string // TEXT
-  int: number // INTEGER
-  integer: number // INTEGER
-  float: number // REAL
-  bin: ArrayBuffer // BLOB
-  binary: ArrayBuffer // BLOB
-  boolean: boolean // Boolean
-  bool: boolean // Boolean
-}
-
-const normalizer = `
-/**
- * Class name types
- */
-String: string // TEXT
-Number: number // REAL
-Date: Date
-ArrayBuffer: ArrayBuffer // BLOB
-Boolean: boolean
-Object: Record<string, any> | any[] // JSON
-/**
- * Additional aliases
- */
-JSON: Record<string, any> | any[]
-StringArray: string[]
-str: string // TEXT
-string: string // TEXT
-int: number // INTEGER
-integer: number // INTEGER
-float: number // REAL
-bin: ArrayBuffer // BLOB
-binary: ArrayBuffer // BLOB
-boolean: boolean // Boolean
-bool: boolean // Boolean
-  `.split('\n')
-  .map((r) => r.trim())
-  .map((r) => {
-    if (r) {
-      const m = /^(.+?):.+?\/\/ (.+)$/.exec(r)
-      if (m) {
-        return [m[1], m[2]]
-      }
-    }
-    return null
-  })
-  .filter((r) => r)
-  .map((r) => r as any[])
-  .reduce((prev, [k, v]) => ({ ...prev, [k]: v }), {}) as Record<string, SqliteAllTypes>
-
-export function normalizeAlias (k: keyof AliasToJSType): SqliteAllTypes {
-  return normalizer[k] || k
-}
-
-export function isNullOrUndefined (a: any): a is null | undefined {
-  if (a === null || a === undefined) {
-    return true
-  }
-  return false
 }

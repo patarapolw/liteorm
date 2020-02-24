@@ -1,7 +1,8 @@
 import assert from 'assert'
 
+import SQL from 'sql-template-strings'
+
 import { db, dbCard } from './0-create'
-import { SqlFunction } from '../../src'
 
 export default () => describe('deleteDatabase', () => {
   ;[
@@ -16,9 +17,9 @@ export default () => describe('deleteDatabase', () => {
     it(JSON.stringify(cond), async () => {
       await db.delete(dbCard)(cond)
       const r = await db.find(dbCard)(cond, {
-        count: new SqlFunction('COUNT (*)'),
+        count: SQL`COUNT (*)`,
       })
-      assert(r[0].count === 0)
+      assert((await r.first()).count === 0)
     })
   })
 })

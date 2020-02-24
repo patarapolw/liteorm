@@ -35,7 +35,7 @@ export default () => describe('chainDatabase', () => {
         },
       )
 
-      assert(r.length > 0)
+      assert((await r.all()).length > 0)
     })
   })
 })

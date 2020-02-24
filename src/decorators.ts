@@ -1,6 +1,8 @@
 import 'reflect-metadata'
+import { SQLStatement } from 'sql-template-strings'
+
 import { Table, ITransformer } from './table'
-import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias, SqlFunction } from './utils'
+import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias } from './utils'
 
 export function primary<
   T extends AliasToJSType[TSql] = any,
@@ -10,7 +12,7 @@ export function primary<
   name?: string
   type?: TSql
   autoincrement?: boolean
-  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
+  default?: SQLStatement | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
 } = {}): PropertyDecorator {
@@ -21,7 +23,7 @@ export function primary<
     type = normalizeAlias(type)
 
     const name = params.name || key as string
-    const autoincrement = !!params.autoincrement && ['INTEGER', 'REAL'].includes(AliasToSqliteType[type])
+    const autoincrement = !!params.autoincrement && ['INTEGER', 'REAL'].includes(AliasToSqliteType[type].text)
     if (autoincrement) {
       type = 'int'
     }
@@ -50,7 +52,7 @@ export function prop<
   unique?: string | boolean
   null?: boolean
   references?: string | Table<any> | { table: Table<any>; key: string }
-  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
+  default?: SQLStatement | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<T>>
@@ -165,7 +167,7 @@ export interface IPrimaryRow<
   name: string | string[]
   type?: TSql
   autoincrement: boolean
-  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
+  default?: SQLStatement | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
 }
@@ -180,7 +182,7 @@ export interface IPropRow<
   null: boolean
   index?: string
   references?: string
-  default?: SqlFunction | T | ((entry: Entry) => T | Promise<T>)
+  default?: SQLStatement | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)
   onChange?: T | ((entry: Entry) => T | Promise<T>)
   transform?: Partial<ITransformer<T>>
