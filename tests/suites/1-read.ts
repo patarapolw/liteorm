@@ -27,10 +27,10 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const r = await db.find(dbCard)(cond, {
+      const r = await db.first(dbCard)(cond, {
         count: SQL`COUNT (*)`,
       })
-      assert((await r.first()).count > 0)
+      assert(r!.count > 0)
 
       // const result = await db.find(dbCard)(cond, {
       //   front: dbCard.c.front,
@@ -62,7 +62,7 @@ export default () => describe('readDatabase', () => {
       /**
        * Wildcard is allowed, but I think it should be discouraged.
        */
-      await db.find(dbCard)(cond, '*', { limit: 5 }).catch((err) => {
+      await db.first(dbCard)(cond, '*', { limit: 5 }).catch((err) => {
         assert(err, 'Error should be thrown.')
       })
     })

@@ -59,7 +59,156 @@ export class Db extends Emittery.Typed<{
     return table.create(this.sql)
   }
 
-  find (table0: Table<any>, ...tables: (Table<any> | {
+  each (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return <
+      Select extends {
+        [alias: string]: string | SQLStatement | Column
+      } = typeof table0['c'],
+      R = UndefinedEqNull<{
+        [K in keyof Select]: Select[K] extends Column<infer T> ? T : any
+      }>
+    >(
+      qCond: Record<string, any>,
+      select: Select | '*',
+      options: {
+        postfix?: string
+        sort?: {
+          key: Column | string
+          desc?: boolean
+        }
+        offset?: number
+        limit?: number
+      } = {},
+    ) => {
+      return async (cb: (r: R) => void) => {
+        return (await this._find(table0, ...tables)(qCond, select, options)).each(cb as any)
+      }
+    }
+  }
+
+  all (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return async <
+      Select extends {
+        [alias: string]: string | SQLStatement | Column
+      } = typeof table0['c']
+    >(
+      qCond: Record<string, any>,
+      select: Select | '*',
+      options: {
+        postfix?: string
+        sort?: {
+          key: Column | string
+          desc?: boolean
+        }
+        offset?: number
+        limit?: number
+      } = {},
+    ) => {
+      return (await this._find(table0, ...tables)(qCond, select, options)).all()
+    }
+  }
+
+  first (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return async <
+      Select extends {
+        [alias: string]: string | SQLStatement | Column
+      } = typeof table0['c']
+    >(
+      qCond: Record<string, any>,
+      select: Select | '*',
+      options: {
+        postfix?: string
+        sort?: {
+          key: Column | string
+          desc?: boolean
+        }
+        offset?: number
+        limit?: number
+      } = {},
+    ) => {
+      return (await this._find(table0, ...tables)(qCond, select, options)).first()
+    }
+  }
+
+  update (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return async (
+      qCond: Record<string, any>,
+      set: Record<string, any> | {
+        table: Table<any>
+        set: Record<string, any>
+      }[],
+      options: {
+        postfix?: string
+        sort?: {
+          key: Column | string
+          desc?: boolean
+        }
+        offset?: number
+        limit?: number
+      } = {},
+    ) => {
+      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
+        if (Array.isArray(set)) {
+          await Promise.all(set.filter((s) => s.table === table).map(async (s) => {
+            await table.__updateBySql(this.sql)(sql, s.set)
+          }))
+        } else {
+          await table.__updateBySql(this.sql)(sql, set)
+        }
+      }))
+    }
+  }
+
+  delete (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return async (
+      qCond: Record<string, any>,
+      options: {
+        postfix?: string
+        sort?: {
+          key: Column | string
+          desc?: boolean
+        }
+        offset?: number
+        limit?: number
+      } = {},
+    ) => {
+      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
+        await table.__deleteBySql(this.sql)(sql)
+      }))
+    }
+  }
+
+  async close () {
+    await this.sql.close()
+    return this
+  }
+
+  private _find (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
     cond?: string
@@ -86,7 +235,7 @@ export class Db extends Emittery.Typed<{
       } = {},
     ): Promise<{
       sql: SQLStatement
-      first: () => Promise<R>
+      first: () => Promise<R | null>
       each: (cb: (result: R) => void) => Promise<number>
       all: () => Promise<R[]>
     }> => {
@@ -96,7 +245,7 @@ export class Db extends Emittery.Typed<{
         cond: qCond,
         select: select === '*' ? table0.c : select,
         tables: tablesArray,
-        options: options || {},
+        options,
       })
 
       const selectDict = Object.entries(
@@ -198,7 +347,7 @@ export class Db extends Emittery.Typed<{
     }
   }
 
-  findIds (table0: Table<any>, ...tables: (Table<any> | {
+  private _findIds (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
     cond?: string
@@ -226,7 +375,7 @@ export class Db extends Emittery.Typed<{
 
       return Promise.all(tt.map(async (t) => {
         return {
-          sql: (await this.find(table0, ...tables)(qCond, {
+          sql: (await this._find(table0, ...tables)(qCond, {
             [`${t.m.__meta.name}__id`]: new Column({
               name: t.primaryKey,
               table: t,
@@ -237,68 +386,5 @@ export class Db extends Emittery.Typed<{
         }
       }))
     }
-  }
-
-  update (table0: Table<any>, ...tables: (Table<any> | {
-    type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: Column
-    cond?: string
-    to: Column | Table<any>
-  })[]) {
-    return async (
-      qCond: Record<string, any>,
-      set: Record<string, any> | {
-        table: Table<any>
-        set: Record<string, any>
-      }[],
-      options: {
-        postfix?: string
-        sort?: {
-          key: Column | string
-          desc?: boolean
-        }
-        offset?: number
-        limit?: number
-      } = {},
-    ) => {
-      await Promise.all((await this.findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
-        if (Array.isArray(set)) {
-          await Promise.all(set.filter((s) => s.table === table).map(async (s) => {
-            await table.__updateBySql(this.sql)(sql, s.set)
-          }))
-        } else {
-          await table.__updateBySql(this.sql)(sql, set)
-        }
-      }))
-    }
-  }
-
-  delete (table0: Table<any>, ...tables: (Table<any> | {
-    type?: 'inner' | 'left' | 'cross' | 'natural'
-    from?: Column
-    cond?: string
-    to: Column | Table<any>
-  })[]) {
-    return async (
-      qCond: Record<string, any>,
-      options: {
-        postfix?: string
-        sort?: {
-          key: Column | string
-          desc?: boolean
-        }
-        offset?: number
-        limit?: number
-      } = {},
-    ) => {
-      await Promise.all((await this.findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
-        await table.__deleteBySql(this.sql)(sql)
-      }))
-    }
-  }
-
-  async close () {
-    await this.sql.close()
-    return this
   }
 }

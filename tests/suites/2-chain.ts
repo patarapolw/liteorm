@@ -15,7 +15,7 @@ export default () => describe('chainDatabase', () => {
     },
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
-      const r = await db.find(dbCard, {
+      const r = await db.all(dbCard, {
         from: dbCard.c.noteId,
         to: dbNote,
       })(
@@ -35,7 +35,7 @@ export default () => describe('chainDatabase', () => {
         },
       )
 
-      assert((await r.all()).length > 0)
+      assert(r.length > 0)
     })
   })
 })

@@ -16,10 +16,10 @@ export default () => describe('deleteDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       await db.delete(dbCard)(cond)
-      const r = await db.find(dbCard)(cond, {
+      const r = await db.first(dbCard)(cond, {
         count: SQL`COUNT (*)`,
       })
-      assert((await r.first()).count === 0)
+      assert(r!.count === 0)
     })
   })
 })
