@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -15,7 +15,8 @@
   ],
   "files": [
     "lib",
-    "src"
+    "src",
+    "tsconfig.json"
   ],
   "author": "Pacharapol Withayasakpunt",
   "license": "MIT",
