@@ -1,9 +1,6 @@
-import { SQLStatement } from 'sql-template-strings'
-
 import { Table } from './table'
-import { safeColumnName } from './utils'
+import { safeColumnName, SQLParams } from './utils'
 import { IPropRow } from './decorators'
-import { joinSQL, SQL } from './compat/sql-template-strings'
 
 /**
  *
@@ -13,42 +10,42 @@ import { joinSQL, SQL } from './compat/sql-template-strings'
 export function parseCond (
   q: Record<string, any>,
   cols: Record<string, Table<any>>,
-): SQLStatement {
-  const subClause: SQLStatement[] = []
+  params: SQLParams,
+): string {
+  const subClause: string[] = []
 
   if (Array.isArray(q.$or)) {
-    subClause.push(SQL`(${
-      joinSQL(q.$or.map((el) => parseCond(el, cols)), ' OR ')
-    })`)
+    subClause.push(q.$or.map((el) => parseCond(el, cols, params)).join(' OR '))
   } else if (Array.isArray(q.$and)) {
-    subClause.push(SQL`(${
-      joinSQL(q.$and.map((el) => parseCond(el, cols)), ' AND ')
-    })`)
+    subClause.push(q.$and.map((el) => parseCond(el, cols, params)).join(' AND '))
   } else {
-    subClause.push(SQL`(${
-      _parseCondBasic(q, cols)
-    })`)
+    subClause.push(_parseCondBasic(q, cols, params))
   }
 
-  if (subClause.length > 1) {
-    return SQL`(${joinSQL(subClause, ' AND ')})`
-  } else if (subClause.length === 1) {
-    return subClause[0]
+  if (subClause.length > 0) {
+    return subClause.join(' AND ')
   }
-  return SQL`TRUE`
+
+  return 'TRUE'
 }
 
 function _parseCondBasic (
   cond: Record<string, any>,
   cols: Record<string, Table<any>>,
-): SQLStatement {
-  const cList: SQLStatement[] = []
+  params: SQLParams,
+): string {
+  const cList: string[] = []
 
   function doDefault (k: string, v: any) {
+    const vParam = params.add(v)
+
+    /**
+     * Already a safen column name
+     */
     if (strArrayCols.includes(k)) {
-      cList.push(SQL`${SQL(k)} LIKE '%\x1f'||${v}||'\x1f%'`)
+      cList.push(`${k} LIKE '%\x1f'||${vParam}||'\x1f%'`)
     } else {
-      cList.push(SQL`${SQL(k)} = ${v}`)
+      cList.push(`${k} = ${vParam}`)
     }
   }
 
@@ -79,14 +76,15 @@ function _parseCondBasic (
     if (v) {
       if (Array.isArray(v)) {
         if (isStrArray) {
-          cList.push(SQL`(${joinSQL((v.map((v0) => {
-            return SQL`${SQL(k)} LIKE '%\x1f'||${v0}||'\x1f%'`
-          })), ' AND ')})`)
+          cList.push(v.map((v0) => {
+            const vParam = params.add(v0)
+            return `${k} LIKE '%\x1f'||${vParam}||'\x1f%'`
+          }).join(' AND '))
         } else {
           if (v.length > 1) {
-            cList.push(SQL`${SQL(k)} IN (${joinSQL(v.map((v0) => SQL`${v0}`), ',')})`)
+            cList.push(`${k} IN (${v.map((v0) => `${params.add(v0)}`).join(',')})`)
           } else if (v.length === 1) {
-            cList.push(SQL`${SQL(k)} = ${v[0]}`)
+            cList.push(`${k} = ${params.add(v[0])}`)
           }
         }
       } else if (typeof v === 'object' && v.constructor === Object) {
@@ -100,23 +98,23 @@ function _parseCondBasic (
           switch (op) {
             case '$in':
               if (isStrArray) {
-                cList.push(SQL`(${joinSQL(v1.map((v0) => {
-                  return SQL`${SQL(k)} LIKE '%\x1f'||${v0}||'\x1f%'`
-                }), ' OR ')})`)
+                cList.push(v1.map((v0) => {
+                  return `${k} LIKE '%\x1f'||${params.add(v0)}||'\x1f%'`
+                }).join(' OR '))
               } else {
                 if (v1.length > 1) {
-                  cList.push(SQL`${SQL(k)} IN (${joinSQL(v1.map((v0) => SQL`${v0}`), ',')})`)
+                  cList.push(`${k} IN (${v1.map((v0) => params.add(v0)).join(',')})`)
                 } else if (v1.length === 1) {
-                  cList.push(SQL`${SQL(k)} = ${v1[0]}`)
+                  cList.push(`${k} = ${params.add(v1[0])}`)
                 }
               }
               isPushed = true
               break
             case '$nin':
               if (v1.length > 1) {
-                cList.push(SQL`${SQL(k)} NOT IN (${joinSQL(v1.map((v0) => SQL`${v0}`), ',')})`)
+                cList.push(`${k} NOT IN (${v1.map((v0) => params.add(v0)).join(',')})`)
               } else {
-                cList.push(SQL`${SQL(k)} != ${v1[0]}`)
+                cList.push(`${k} != ${params.add(v1[0])}`)
               }
               isPushed = true
               break
@@ -138,34 +136,34 @@ function _parseCondBasic (
 
         switch (op) {
           case '$like':
-            cList.push(SQL`${SQL(k)} LIKE ${v1}`)
+            cList.push(`${k} LIKE ${params.add(v1)}`)
             break
           case '$nlike':
-            cList.push(SQL`${SQL(k)} NOT LIKE ${v1}`)
+            cList.push(`${k} NOT LIKE ${params.add(v1)}`)
             break
           case '$substr':
-            cList.push(SQL`${SQL(k)} LIKE '%'||${v1}||'%'`)
+            cList.push(`${k} LIKE '%'||${params.add(v1)}||'%'`)
             break
           case '$nsubstr':
-            cList.push(SQL`${SQL(k)} NOT LIKE '%'||${v1}||'%'`)
+            cList.push(`${k} NOT LIKE '%'||${params.add(v1)}||'%'`)
             break
           case '$exists':
-            cList.push(SQL`${SQL(k)} IS ${SQL(v1 ? 'NOT NULL' : 'NULL')}`)
+            cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'}`)
             break
           case '$gt':
-            cList.push(SQL`${SQL(k)} > ${v1}`)
+            cList.push(`${k} > ${params.add(v1)}`)
             break
           case '$gte':
-            cList.push(SQL`${SQL(k)} >= ${v1}`)
+            cList.push(`${k} >= ${params.add(v1)}`)
             break
           case '$lt':
-            cList.push(SQL`${SQL(k)} < ${v1}`)
+            cList.push(`${k} < ${params.add(v1)}`)
             break
           case '$lte':
-            cList.push(SQL`${SQL(k)} <= ${v1}`)
+            cList.push(`${k} <= ${params.add(v1)}`)
             break
           case '$ne':
-            cList.push(SQL`${SQL(k)} != ${v1}`)
+            cList.push(`${k} != ${params.add(v1)}`)
             break
           default:
             doDefault(k, v)
@@ -178,10 +176,8 @@ function _parseCondBasic (
     }
   }
 
-  if (cList.length > 1) {
-    return SQL`(${joinSQL(cList, ' AND ')})`
-  } else if (cList.length === 1) {
-    return cList[0]
+  if (cList.length > 0) {
+    return cList.join(' AND ')
   }
-  return SQL`TRUE`
+  return 'TRUE'
 }

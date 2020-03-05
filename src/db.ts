@@ -1,12 +1,13 @@
-import 'bluebird-global'
-import sqlite from 'sqlite'
+import sqlite3 from 'sqlite3'
 import Emittery from 'emittery'
-import { SQLStatement } from 'sql-template-strings'
 
 import { Table, Column, UndefinedEqNull } from './table'
 import { parseCond } from './find'
-import { safeColumnName } from './utils'
-import { SQL, joinSQL } from './compat/sql-template-strings'
+import { safeColumnName, SQLParams, RawSQL, sql } from './utils'
+
+try {
+  require('bluebird-global')
+} catch (_) {}
 
 export class Db extends Emittery.Typed<{
   'pre-find': {
@@ -18,7 +19,7 @@ export class Db extends Emittery.Typed<{
       to: Column | Table<any>
     }[]
     select: {
-      [alias: string]: string | SQLStatement | Column
+      [alias: string]: string | RawSQL | Column
     }
     options: {
       postfix?: string
@@ -30,18 +31,21 @@ export class Db extends Emittery.Typed<{
       limit?: number
     }
   }
-  'find-sql': SQLStatement
-}> {
-  static async connect (f: string | sqlite.Database, options?: any) {
-    const sql = typeof f === 'string' ? await sqlite.open(f, options) : f
-    return new Db({ sql })
+  'find-sql': {
+    stmt: string
+    params: SQLParams
   }
+}> {
+  sql: sqlite3.Database
 
-  sql: sqlite.Database
-
-  private constructor (params: any) {
+  constructor (
+    filename: string | sqlite3.Database, options?: any,
+  ) {
     super()
-    this.sql = params.sql
+
+    this.sql = typeof filename === 'string'
+      ? new sqlite3.Database(filename, options)
+      : filename
   }
 
   /**
@@ -67,7 +71,7 @@ export class Db extends Emittery.Typed<{
   })[]) {
     return <
       Select extends {
-        [alias: string]: string | SQLStatement | Column
+        [alias: string]: string | RawSQL | Column
       } = typeof table0['c'],
       R = UndefinedEqNull<{
         [K in keyof Select]: Select[K] extends Column<infer T> ? T : any
@@ -99,7 +103,7 @@ export class Db extends Emittery.Typed<{
   })[]) {
     return async <
       Select extends {
-        [alias: string]: string | SQLStatement | Column
+        [alias: string]: string | RawSQL | Column
       } = typeof table0['c']
     >(
       qCond: Record<string, any>,
@@ -118,6 +122,19 @@ export class Db extends Emittery.Typed<{
     }
   }
 
+  count (table0: Table<any>, ...tables: (Table<any> | {
+    type?: 'inner' | 'left' | 'cross' | 'natural'
+    from?: Column
+    cond?: string
+    to: Column | Table<any>
+  })[]) {
+    return async (qCond: Record<string, any>): Promise<number> => {
+      return (await this.first(table0, ...tables)(qCond, {
+        count: sql`COUNT (*)`,
+      }) || {}).count || 0
+    }
+  }
+
   first (table0: Table<any>, ...tables: (Table<any> | {
     type?: 'inner' | 'left' | 'cross' | 'natural'
     from?: Column
@@ -126,7 +143,7 @@ export class Db extends Emittery.Typed<{
   })[]) {
     return async <
       Select extends {
-        [alias: string]: string | SQLStatement | Column
+        [alias: string]: string | RawSQL | Column
       } = typeof table0['c']
     >(
       qCond: Record<string, any>,
@@ -138,10 +155,12 @@ export class Db extends Emittery.Typed<{
           desc?: boolean
         }
         offset?: number
-        limit?: number
       } = {},
     ) => {
-      return (await this._find(table0, ...tables)(qCond, select, options)).first()
+      return (await (await this._find(table0, ...tables)(qCond, select, {
+        ...options,
+        limit: 1,
+      })).all())[0]
     }
   }
 
@@ -167,13 +186,16 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
+      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({
+        sql: { stmt, params },
+        table,
+      }) => {
         if (Array.isArray(set)) {
           await Promise.all(set.filter((s) => s.table === table).map(async (s) => {
-            await table.__updateBySql(this.sql)(sql, s.set)
+            await table.__updateBySql(this.sql)(stmt, params, s.set)
           }))
         } else {
-          await table.__updateBySql(this.sql)(sql, set)
+          await table.__updateBySql(this.sql)(stmt, params, set)
         }
       }))
     }
@@ -197,15 +219,19 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ) => {
-      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({ sql, table }) => {
-        await table.__deleteBySql(this.sql)(sql)
+      await Promise.all((await this._findIds(table0, ...tables)(qCond, options)).map(async ({
+        sql: { stmt, params },
+        table,
+      }) => {
+        await table.__deleteBySql(this.sql)(stmt, params)
       }))
     }
   }
 
   async close () {
-    await this.sql.close()
-    return this
+    return new Promise<void>((resolve, reject) => {
+      this.sql.close((err) => err ? reject(err) : resolve())
+    })
   }
 
   private _find (table0: Table<any>, ...tables: (Table<any> | {
@@ -216,7 +242,7 @@ export class Db extends Emittery.Typed<{
   })[]) {
     return async <
       Select extends {
-        [alias: string]: string | SQLStatement | Column
+        [alias: string]: string | RawSQL | Column
       } = typeof table0['c'],
       R = UndefinedEqNull<{
         [K in keyof Select]: Select[K] extends Column<infer T> ? T : any
@@ -234,8 +260,10 @@ export class Db extends Emittery.Typed<{
         limit?: number
       } = {},
     ): Promise<{
-      sql: SQLStatement
-      first: () => Promise<R | null>
+      sql: {
+        stmt: string
+        params: SQLParams
+      }
       each: (cb: (result: R) => void) => Promise<number>
       all: () => Promise<R[]>
     }> => {
@@ -253,8 +281,8 @@ export class Db extends Emittery.Typed<{
       ).map(([alias, col]) => {
         const key = col instanceof Column
           ? safeColumnName(`${col.tableName}.${col.name}`)
-          : col instanceof SQLStatement
-            ? col.text : safeColumnName(col)
+          : col instanceof RawSQL
+            ? col.content : safeColumnName(col)
         return [alias, {
           key,
           column: col instanceof Column ? col : undefined,
@@ -271,20 +299,21 @@ export class Db extends Emittery.Typed<{
           : t.to instanceof Table ? t.to : t.to.opts.table),
       ].reduce((prev, t) => ({ ...prev, [t.m.__meta.name]: t }), {})
 
-      const postfix = options.postfix ? [SQL(options.postfix)] : []
+      const postfix = options.postfix ? [options.postfix] : []
       if (options.sort) {
-        postfix.push(SQL`ORDER BY ${SQL(safeColumnName(
+        postfix.push(`ORDER BY ${safeColumnName(
           typeof options.sort.key === 'string' ? options.sort.key : `${options.sort.key.tableName}.${options.sort.key.name}`,
-        ))} ${SQL(options.sort.desc ? 'DESC' : 'ASC')}`)
+        )} ${options.sort.desc ? 'DESC' : 'ASC'}`)
       }
       if (options.limit) {
-        postfix.push(SQL(`LIMIT ${options.limit}`))
+        postfix.push(`LIMIT ${options.limit}`)
       }
       if (options.offset) {
-        postfix.push(SQL(`OFFSET ${options.offset}`))
+        postfix.push(`OFFSET ${options.offset}`)
       }
 
-      const sql = joinSQL([
+      const params = new SQLParams()
+      const stmt = [
         `SELECT ${selectDict ? Object.entries(selectDict).map(([a, k]) => {
           return k.key === a ? k.key : `${k.key} AS ${safeColumnName(a)}`
         }).join(',') : select}`,
@@ -312,11 +341,11 @@ export class Db extends Emittery.Typed<{
             return `${t.type || 'NATURAL'} JOIN ${safeColumnName(toTable.m.__meta.name)}`
           }
         }),
-        SQL`WHERE ${parseCond(qCond, tableRecord)}`,
+        `WHERE ${parseCond(qCond, tableRecord, params)}`,
         ...postfix,
-      ], ' ')
+      ].join(' ')
 
-      await this.emit('find-sql', sql)
+      await this.emit('find-sql', { stmt, params })
 
       const parseNative = (r: Record<string, any>) => {
         Object.entries(r).map(([alias, v]) => {
@@ -329,20 +358,26 @@ export class Db extends Emittery.Typed<{
       }
 
       return {
-        sql,
-        first: async () => parseNative(await this.sql.get(sql)) as any,
+        sql: {
+          stmt,
+          params,
+        },
         each: (cb) => {
           return new Promise((resolve, reject) => {
-            this.sql.each(sql, (err, r) => {
-              if (err) {
-                reject(err)
-              }
-              // eslint-disable-next-line standard/no-callback-literal
-              cb(parseNative(r) as any)
-            }).then((n) => resolve(n))
+            this.sql.each(stmt, params.data, (err, r) => {
+              err ? reject(err) : cb(parseNative(r) as any)
+            }, (err, completion) => {
+              err ? reject(err) : resolve(completion)
+            })
           })
         },
-        all: async () => (await this.sql.all(sql)).map((r) => parseNative(r)) as any[],
+        all: async () => {
+          return new Promise((resolve, reject) => {
+            this.sql.all(stmt, params.data, (err: any, data: any[]) => {
+              err ? reject(err) : resolve(data.map((r) => parseNative(r) as any))
+            })
+          })
+        },
       }
     }
   }

@@ -48,7 +48,7 @@ export const dbMedia = new Table(DbMedia)
 let _db: Db
 
 export async function initDatabase (filename: string = 'tests/test.db') {
-  const db = await Db.connect(filename)
+  const db = new Db(filename)
   await db.init([dbNote, dbCard, dbMedia])
   _db = db
 }

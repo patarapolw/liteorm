@@ -1,7 +1,5 @@
 import assert from 'assert'
 
-import SQL from 'sql-template-strings'
-
 import { db, dbCard } from './0-create'
 
 export default () => describe('readDatabase', () => {
@@ -27,10 +25,8 @@ export default () => describe('readDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       // db.cols.card.on('find', console.log)
-      const r = await db.first(dbCard)(cond, {
-        count: SQL`COUNT (*)`,
-      })
-      assert(r!.count > 0)
+      const count = await db.count(dbCard)(cond)
+      assert(count > 0)
 
       // const result = await db.find(dbCard)(cond, {
       //   front: dbCard.c.front,
@@ -62,7 +58,7 @@ export default () => describe('readDatabase', () => {
       /**
        * Wildcard is allowed, but I think it should be discouraged.
        */
-      await db.first(dbCard)(cond, '*', { limit: 5 }).catch((err) => {
+      await db.all(dbCard)(cond, '*', { limit: 5 }).catch((err) => {
         assert(err, 'Error should be thrown.')
       })
     })

@@ -1,7 +1,5 @@
 import assert from 'assert'
 
-import SQL from 'sql-template-strings'
-
 import { db, dbCard } from './0-create'
 
 export default () => describe('deleteDatabase', () => {
@@ -16,10 +14,8 @@ export default () => describe('deleteDatabase', () => {
   ].map((cond) => {
     it(JSON.stringify(cond), async () => {
       await db.delete(dbCard)(cond)
-      const r = await db.first(dbCard)(cond, {
-        count: SQL`COUNT (*)`,
-      })
-      assert(r!.count === 0)
+      const count = await db.count(dbCard)(cond)
+      assert(count === 0)
     })
   })
 })

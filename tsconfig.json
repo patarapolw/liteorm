@@ -16,11 +16,7 @@
     "downlevelIteration": true,
     "declaration": true,
     "declarationMap": true,
-    "lib": ["esnext"],
-    "types": [
-      "node",
-      "mocha"
-    ]
+    "lib": ["esnext"]
   },
   "exclude": [
     "node_modules",

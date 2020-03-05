@@ -1,6 +1,55 @@
-import { SQLStatement } from 'sql-template-strings'
+/**
+ * @internal
+ *
+ * Please use sql template string instead.
+ *
+ * ```js
+ * sql`COUNT (*)`
+ * ```
+ */
+export class RawSQL {
+  constructor (
+    public content: string,
+  ) {}
+}
 
-import { SQL } from './compat/sql-template-strings'
+/**
+ * Pure string tagged template literal for sql.
+ *
+ * ```js
+ * sql`COUNT (*)`
+ * sql('COUNT (*)')
+ * ```
+ */
+export function sql (ss: TemplateStringsArray | string, ...vs: string[]) {
+  return typeof ss === 'string'
+    ? new RawSQL(ss)
+    : new RawSQL(ss.map((s, i) => `${s}${vs[i] || ''}`).join(''))
+}
+
+/**
+ * @internal
+ *
+ * SQLParams placeholder
+ */
+export class SQLParams {
+  data: Record<string, any> = {}
+  counter = 0
+
+  add (v: any) {
+    if (Object.keys(this.data).length >= 1000) {
+      throw new Error('SQLITE_LIMIT_VARIABLE_NUMBER exceeded. (default value: 999)')
+    }
+
+    let k = '$' + ++this.counter
+    while (this.data[k]) {
+      k = '$' + ++this.counter
+    }
+
+    this.data[k] = v
+    return k
+  }
+}
 
 /**
  * https://www.sqlite.org/datatype3.html
@@ -9,37 +58,37 @@ export type SqliteNative = 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB'
 export type SqliteExt = 'Boolean' | 'Date' | 'JSON' | 'StringArray'
 export type SqliteAllTypes = SqliteNative | SqliteExt
 
-export const AliasToSqliteType: Record<string, SQLStatement> = {
+export const AliasToSqliteType: Record<string, string> = {
   /**
    * Identity types
    */
-  TEXT: SQL`TEXT`,
-  INTEGER: SQL`INTEGER`,
-  REAL: SQL`REAL`,
-  BLOB: SQL`BLOB`,
+  TEXT: `TEXT`,
+  INTEGER: `INTEGER`,
+  REAL: `REAL`,
+  BLOB: `BLOB`,
   /**
    * Class name types
    */
-  String: SQL`TEXT`,
-  Number: SQL`REAL`,
-  Date: SQL`INTEGER`,
-  ArrayBuffer: SQL`BLOB`,
-  Boolean: SQL`INTEGER`,
-  Object: SQL`TEXT`,
+  String: `TEXT`,
+  Number: `REAL`,
+  Date: `INTEGER`,
+  ArrayBuffer: `BLOB`,
+  Boolean: `INTEGER`,
+  Object: `TEXT`,
   /**
    * Additional aliases
    */
-  JSON: SQL`TEXT`,
-  StringArray: SQL`TEXT`,
-  str: SQL`TEXT`,
-  string: SQL`TEXT`,
-  int: SQL`INTEGER`,
-  integer: SQL`INTEGER`,
-  float: SQL`REAL`,
-  bin: SQL`BLOB`,
-  binary: SQL`BLOB`,
-  boolean: SQL`INTEGER`,
-  bool: SQL`INTEGER`,
+  JSON: `TEXT`,
+  StringArray: `TEXT`,
+  str: `TEXT`,
+  string: `TEXT`,
+  int: `INTEGER`,
+  integer: `INTEGER`,
+  float: `REAL`,
+  bin: `BLOB`,
+  binary: `BLOB`,
+  boolean: `INTEGER`,
+  bool: `INTEGER`,
 }
 
 export interface AliasToJSType extends Record<keyof typeof AliasToSqliteType, any> {
@@ -286,5 +335,7 @@ export function safeColumnName (s: string) {
   const validIdToken = 'A-Z0-9_$:'
   const kwRegex = new RegExp(`(^|[^${validIdToken}\\)])(${keywords.join('|')})($|[^${validIdToken}\\()])`, 'gi')
 
-  return s.replace(kwRegex, '$1"$2"$3')
+  return s.replace(kwRegex, (_, p1, p2, p3) => {
+    return `${p1}"${p2.replace(/"/g, '["]')}"${p3}`
+  })
 }
