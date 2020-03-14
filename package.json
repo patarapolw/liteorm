@@ -1,10 +1,11 @@
 {
   "name": "liteorm",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
+    "preinstall": "if !(test -x is-npm); then is-npm; fi",
     "prepack": "yarn build",
     "build": "tsc -P src/tsconfig.json",
     "test": "ts-mocha tests/**/*.spec.ts"
@@ -26,8 +27,7 @@
   },
   "dependencies": {
     "emittery": "^0.4.1",
-    "reflect-metadata": "^0.1.13",
-    "sqlite3": "https://github.com/mapbox/node-sqlite3.git"
+    "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
     "@types/bluebird-global": "^3.5.12",
@@ -47,11 +47,13 @@
     "eslint-plugin-standard": ">=4.0.0",
     "faker": "^4.1.0",
     "mocha": "^6.x",
+    "sqlite3": "^4.1.1",
     "ts-mocha": "^6.0.0",
     "typescript": "^3.7.5"
   },
   "peerDependencies": {
     "bluebird": "^3.7.2",
-    "bluebird-global": "^1.0.1"
+    "bluebird-global": "^1.0.1",
+    "sqlite3": "^4.1.1"
   }
 }
