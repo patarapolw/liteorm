@@ -22,7 +22,7 @@ export function primary<
     type = normalizeAlias(type)
 
     const name = params.name || key as string
-    const autoincrement = !!params.autoincrement && ['INTEGER', 'REAL'].includes(AliasToSqliteType[type])
+    const autoincrement = !!params.autoincrement
     if (autoincrement) {
       type = 'int'
     }
