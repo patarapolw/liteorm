@@ -1,19 +1,15 @@
 module.exports = {
   env: {
-    es6: true,
+    es2020: true,
     node: true,
     mocha: true,
   },
   extends: [
     'standard',
   ],
-  globals: {
-    Atomics: 'readonly',
-    SharedArrayBuffer: 'readonly',
-  },
   parser: '@typescript-eslint/parser',
   parserOptions: {
-    ecmaVersion: 2018,
+    ecmaVersion: 12,
     sourceType: 'module',
   },
   plugins: [
