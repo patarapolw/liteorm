@@ -1,7 +1,7 @@
-import sqlite3 from 'sqlite3';
 import Emittery from 'emittery';
-import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators';
-import { SqliteExt, SQLParams } from './utils';
+import sqlite3 from 'sqlite3';
+import { IPrimaryRow, IPropRow, ISqliteMeta } from './decorators';
+import { SQLParams, SqliteExt } from './utils';
 export declare type UndefinedEqNull<E> = {
     [K in keyof E]: E[K] | (undefined extends E[K] ? null : never);
 };
