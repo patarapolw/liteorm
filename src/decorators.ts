@@ -21,7 +21,7 @@ export function primary<
     let type: keyof typeof AliasToSqliteType = params.type || t.name
     type = normalizeAlias(type)
 
-    const name = params.name || key as string
+    const name = toSnakeCase(params.name || key as string)
     const autoincrement = !!params.autoincrement
     if (autoincrement) {
       type = 'int'
@@ -60,7 +60,7 @@ export function prop<
   return function (target, key) {
     const t = Reflect.getMetadata('design:type', target, key)
 
-    const name = params.name || key as string
+    const name = toSnakeCase(params.name || key as string)
     const references = typeof params.references === 'string'
       ? params.references
       : params.references instanceof Table
@@ -138,7 +138,7 @@ export function Entity<T> (params: {
 
     const { createdAt, updatedAt } = timestamp
 
-    const name = params.name || target.constructor.name
+    const name = toSnakeCase(params.name || target.constructor.name)
     const primary = Reflect.getMetadata('sqlite:primary', target.prototype) ||
       (params.primary ? { name: params.primary } : undefined)
     const prop = Reflect.getMetadata('sqlite:prop', target.prototype)
@@ -204,4 +204,29 @@ export interface ISqliteMeta<T> {
   }[]
   createdAt: boolean
   updatedAt: boolean
+}
+
+function toSnakeCase(s: string) {
+  if (s.includes('_')) {
+    return s
+  }
+
+  const phrases: string[] = []
+  let word = ''
+  s.split('').map((c) => {
+    if (c.toLocaleUpperCase() === c) {
+      if (word) {
+        phrases.push(word)
+        word = ''
+      }
+    }
+
+    word += c
+  })
+
+  if (word) {
+    phrases.push(word)
+  }
+
+  return phrases.join('_')
 }
