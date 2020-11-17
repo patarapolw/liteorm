@@ -226,7 +226,7 @@ export class Table<
 
     const stmt = `CREATE TABLE IF NOT EXISTS ${
       safeColumnName(this.m.__meta.name)
-    } (${cols.join(',')})`
+    } (${cols.join(',')}) ${this.m.__meta.withoutRowID ? 'WITHOUT ROWID' : ''}`
 
     await this.emit('build-sql', { stmt })
     await new Promise((resolve, reject) => {

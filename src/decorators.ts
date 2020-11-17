@@ -118,6 +118,7 @@ export function Entity<T> (params: {
     createdAt?: boolean
     updatedAt?: boolean
   }
+  withoutRowID?: boolean
 } = {}): ClassDecorator {
   return function (target) {
     let timestamp = {
@@ -155,7 +156,17 @@ export function Entity<T> (params: {
       } : u
     }) : undefined
 
-    const __meta: ISqliteMeta<T> = { name, primary, prop, unique, index, createdAt, updatedAt }
+    const __meta: ISqliteMeta<T> = {
+      name,
+      primary,
+      prop,
+      unique,
+      index,
+      createdAt,
+      updatedAt,
+      withoutRowID: params.withoutRowID || false
+    }
+
     target.prototype.__meta = __meta
   }
 }
@@ -204,6 +215,7 @@ export interface ISqliteMeta<T> {
   }[]
   createdAt: boolean
   updatedAt: boolean
+  withoutRowID: boolean
 }
 
 function toSnakeCase(s: string) {

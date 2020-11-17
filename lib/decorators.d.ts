@@ -40,6 +40,7 @@ export declare function Entity<T>(params?: {
         createdAt?: boolean;
         updatedAt?: boolean;
     };
+    withoutRowID?: boolean;
 }): ClassDecorator;
 export interface IPrimaryRow<T extends AliasToJSType[TSql] = any, Entry = any, TSql extends SqliteAllTypes = any> {
     name: string | string[];
@@ -75,5 +76,6 @@ export interface ISqliteMeta<T> {
     }[];
     createdAt: boolean;
     updatedAt: boolean;
+    withoutRowID: boolean;
 }
 //# sourceMappingURL=decorators.d.ts.map
