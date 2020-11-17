@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 
-import { Table, ITransformer } from './table'
-import { AliasToSqliteType, AliasToJSType, SqliteAllTypes, normalizeAlias, RawSQL } from './utils'
+import { ITransformer, Table } from './table'
+import { AliasToJSType, AliasToSqliteType, RawSQL, SqliteAllTypes, normalizeAlias } from './utils'
 
 export function primary<
   T extends AliasToJSType[TSql] = any,
@@ -49,6 +49,7 @@ export function prop<
   type?: TSql
   index?: string | boolean
   unique?: string | boolean
+  collate?: string | boolean
   null?: boolean
   references?: string | Table<any> | { table: Table<any>; key: string }
   default?: RawSQL | T | ((entry: Entry) => T | Promise<T>)
@@ -86,6 +87,7 @@ export function prop<
       unique: typeof params.unique === 'string'
         ? params.unique
         : params.unique ? name + '_unique_idx' : undefined,
+      collate: params.collate,
       null: params.null ? params.null : false,
       index: typeof params.index === 'string'
         ? params.index
@@ -180,6 +182,7 @@ export interface IPropRow<
   unique?: string
   null: boolean
   index?: string
+  collate?: string
   references?: string
   default?: RawSQL | T | ((entry: Entry) => T | Promise<T>)
   onUpdate?: T | ((entry: Entry) => T | Promise<T>)

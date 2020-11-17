@@ -6,8 +6,8 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "prepack": "pnpm build",
-    "build": "tsc -P src/tsconfig.json",
-    "test": "ts-mocha tests/**/*.spec.ts"
+    "build": "rm -rf ./lib && tsc -P ./src/tsconfig.json",
+    "test": "ts-mocha ./tests/**/*.spec.ts"
   },
   "keywords": [
     "sqlite",

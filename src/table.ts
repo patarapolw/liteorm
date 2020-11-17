@@ -1,8 +1,8 @@
-import sqlite3 from 'sqlite3'
 import Emittery from 'emittery'
+import sqlite3 from 'sqlite3'
 
-import { ISqliteMeta, IPropRow, IPrimaryRow } from './decorators'
-import { SqliteExt, AliasToSqliteType, isNullOrUndefined, safeColumnName, SQLParams, RawSQL } from './utils'
+import { IPrimaryRow, IPropRow, ISqliteMeta } from './decorators'
+import { AliasToSqliteType, RawSQL, SQLParams, SqliteExt, isNullOrUndefined, safeColumnName } from './utils'
 
 export type UndefinedEqNull<E> = {
   [K in keyof E]: E[K] | (undefined extends E[K] ? null : never)
@@ -189,6 +189,9 @@ export class Table<
           ...(v.null ? [] : [
             'NOT NULL',
           ]),
+          ...(v.collate ? [
+            `COLLATE ${v.collate}`
+          ] : []),
           getDefault(k, v),
           ...(v.references ? [
             `REFERENCES ${safeColumnName(v.references)}`,
