@@ -1,6 +1,6 @@
-import { Table } from './table'
-import { safeColumnName, SQLParams } from './utils'
 import { IPropRow } from './decorators'
+import { Table } from './table'
+import { SQLParams, safeColumnName } from './utils'
 
 /**
  *
@@ -88,6 +88,10 @@ function _parseCondBasic (
           }
         }
       } else if (typeof v === 'object' && v.constructor === Object) {
+        const collate: string | undefined = v.$collate
+          ? `COLLATE ${v.$collate}` : ''
+        delete v.$collate
+
         const op = Object.keys(v)[0]
         let v1 = v[op]
         if (v1 instanceof Date) {
@@ -99,22 +103,22 @@ function _parseCondBasic (
             case '$in':
               if (isStrArray) {
                 cList.push(v1.map((v0) => {
-                  return `${k} LIKE '%\x1f'||${params.add(v0)}||'\x1f%'`
+                  return `${k} LIKE '%\x1f'||${params.add(v0)}||'\x1f%' ${collate}`
                 }).join(' OR '))
               } else {
                 if (v1.length > 1) {
-                  cList.push(`${k} IN (${v1.map((v0) => params.add(v0)).join(',')})`)
+                  cList.push(`${k} IN (${v1.map((v0) => params.add(v0)).join(',')}) ${collate}`)
                 } else if (v1.length === 1) {
-                  cList.push(`${k} = ${params.add(v1[0])}`)
+                  cList.push(`${k} = ${params.add(v1[0])} ${collate}`)
                 }
               }
               isPushed = true
               break
             case '$nin':
               if (v1.length > 1) {
-                cList.push(`${k} NOT IN (${v1.map((v0) => params.add(v0)).join(',')})`)
+                cList.push(`${k} NOT IN (${v1.map((v0) => params.add(v0)).join(',')}) ${collate}`)
               } else {
-                cList.push(`${k} != ${params.add(v1[0])}`)
+                cList.push(`${k} != ${params.add(v1[0])} ${collate}`)
               }
               isPushed = true
               break
@@ -136,37 +140,38 @@ function _parseCondBasic (
 
         switch (op) {
           case '$like':
-            cList.push(`${k} LIKE ${params.add(v1)}`)
+            cList.push(`${k} LIKE ${params.add(v1)} ${collate}`)
             break
           case '$nlike':
-            cList.push(`${k} NOT LIKE ${params.add(v1)}`)
+            cList.push(`${k} NOT LIKE ${params.add(v1)} ${collate}`)
             break
           case '$substr':
-            cList.push(`${k} LIKE '%'||${params.add(v1)}||'%'`)
+            cList.push(`${k} LIKE '%'||${params.add(v1)}||'%' ${collate}`)
             break
           case '$nsubstr':
-            cList.push(`${k} NOT LIKE '%'||${params.add(v1)}||'%'`)
+            cList.push(`${k} NOT LIKE '%'||${params.add(v1)}||'%' ${collate}`)
             break
           case '$exists':
-            cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'}`)
+            cList.push(`${k} IS ${v1 ? 'NOT NULL' : 'NULL'} ${collate}`)
             break
           case '$gt':
-            cList.push(`${k} > ${params.add(v1)}`)
+            cList.push(`${k} > ${params.add(v1)} ${collate}`)
             break
           case '$gte':
-            cList.push(`${k} >= ${params.add(v1)}`)
+            cList.push(`${k} >= ${params.add(v1)} ${collate}`)
             break
           case '$lt':
-            cList.push(`${k} < ${params.add(v1)}`)
+            cList.push(`${k} < ${params.add(v1)} ${collate}`)
             break
           case '$lte':
-            cList.push(`${k} <= ${params.add(v1)}`)
+            cList.push(`${k} <= ${params.add(v1)} ${collate}`)
             break
           case '$ne':
-            cList.push(`${k} != ${params.add(v1)}`)
+            cList.push(`${k} != ${params.add(v1)} ${collate}`)
             break
           default:
-            doDefault(k, v)
+            console.error(`cannot find ${op}, assume $eq`)
+            cList.push(`${k} = ${params.add(v1)} ${collate}`)
         }
       } else {
         doDefault(k, v)

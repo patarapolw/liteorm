@@ -139,7 +139,7 @@ export function Entity<T> (params: {
 
     const { createdAt, updatedAt } = timestamp
 
-    const name = toSnakeCase(params.name || target.constructor.name)
+    const name = toSnakeCase(params.name || target.name)
     const primary = Reflect.getMetadata('sqlite:primary', target.prototype) ||
       (params.primary ? { name: params.primary } : undefined)
     const prop = Reflect.getMetadata('sqlite:prop', target.prototype)
