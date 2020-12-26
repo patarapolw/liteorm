@@ -1,6 +1,6 @@
 {
   "name": "liteorm",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Simple ORM for SQLite with decorators and TypeScript interfaces",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -69,7 +69,6 @@
     "pnpm": "5.x",
     "yarn": "please-use-pnpm"
   },
-  "engineStrict": true,
   "importSort": {
     ".js, .jsx, .ts, .tsx": {
       "parser": "typescript",
